@@ -1,0 +1,47 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import type { CotLegacyRow } from './types.ts';
+import { checkIntegrity, readCotCsv } from './cot/legacy.ts';
+import { indexPrices, readPriceCsv, type PriceIndex } from './price/prices.ts';
+
+export const ROOT = fileURLToPath(new URL('..', import.meta.url));
+export const DATA_DIR = join(ROOT, 'data');
+export const OUTPUT_DIR = join(ROOT, 'output');
+
+export const cotCsvPath = (code: string) => join(DATA_DIR, `cot_legacy_${code}.csv`);
+export const cotMetaPath = (code: string) => join(DATA_DIR, `cot_legacy_${code}.meta.json`);
+export const PRICE_CSV = join(DATA_DIR, 'btc_usdt_daily.csv');
+export const PRICE_META = join(DATA_DIR, 'btc_usdt_daily.meta.json');
+
+export interface Dataset {
+  code: string;
+  cot: CotLegacyRow[];
+  px: PriceIndex;
+  cotSource: string;
+  priceSource: string;
+}
+
+function sourceOf(metaPath: string): string {
+  try {
+    return (JSON.parse(readFileSync(metaPath, 'utf8')) as { source: string }).source;
+  } catch {
+    return 'inconnue (pas de fichier .meta.json)';
+  }
+}
+
+/** Charge COT + prix et refuse de continuer si une identité CFTC est violée. */
+export function loadDataset(code = '133741'): Dataset {
+  const cot = readCotCsv(cotCsvPath(code));
+  const issues = checkIntegrity(cot).filter((x) => x.kind !== 'ecart-dates');
+  if (issues.length > 0) {
+    throw new Error(`Identités CFTC violées :\n${issues.map((x) => `  ${x.asOf} ${x.kind} : ${x.detail}`).join('\n')}`);
+  }
+  return {
+    code,
+    cot,
+    px: indexPrices(readPriceCsv(PRICE_CSV)),
+    cotSource: sourceOf(cotMetaPath(code)),
+    priceSource: sourceOf(PRICE_META),
+  };
+}

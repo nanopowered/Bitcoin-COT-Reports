@@ -1,0 +1,11 @@
+{
+  "source": "TradingView BINANCE:BTCUSDT 1D via tvremix get_ohlcv",
+  "retrievedAt": "2026-09-29T20:51:13Z",
+  "rows": 3124,
+  "first": "2018-03-11",
+  "last": "2026-09-28",
+  "notes": [
+    "Bougie du jour J = 00:00 → 24:00 UTC ; clôture = prix à minuit UTC.",
+    "Bougie du 2026-09-29 (incomplète au moment de la récupération) écartée."
+  ]
+}

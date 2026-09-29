@@ -1,0 +1,13 @@
+{
+  "source": "TradingView (séries COT CFTC Legacy Futures Only) via tvremix get_ohlcv, intervalle 1D",
+  "retrievedAt": "2026-09-29T20:51:13Z",
+  "rows": 442,
+  "first": "2018-04-10",
+  "last": "2026-09-22",
+  "notes": [
+    "Symboles : COT:133741_F_OI, COT:133741_F_NCP_L, COT:133741_F_NCP_S, COT:133741_F_NCP_SPREAD, COT:133741_F_CP_L, COT:133741_F_CP_S, COT:133741_F_NRP_L, COT:133741_F_NRP_S",
+    "Barres horodatées à la date d’arrêté (mardi, ou lundi en semaine fériée), 00:00 UTC.",
+    "Identités CFTC vérifiées sur 442 semaines. Dates d’arrêté un lundi (mardi férié) : 2018-12-24, 2018-12-31, 2020-12-21, 2023-07-03, 2025-11-10.",
+    "Réponses brutes : data/raw/tradingview/. Source officielle : npm run fetch (API CFTC 6dca-aqww)."
+  ]
+}

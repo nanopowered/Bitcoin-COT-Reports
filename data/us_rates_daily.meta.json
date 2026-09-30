@@ -1,0 +1,12 @@
+{
+  "source": "TradingView TVC:US03MY et TVC:US10Y (1D) via tvremix get_ohlcv",
+  "retrievedAt": "2026-09-30T10:20:37Z",
+  "rows": 2615,
+  "first": "2016-07-01",
+  "last": "2026-09-29",
+  "notes": [
+    "Rendements en % par an : bon du Trésor à 3 mois (us03m) et obligation à 10 ans (us10y). Cellule vide : pas de cotation ce jour-là pour ce taux.",
+    "Séances du 2026-09-30 et après écartées (en cours à la récupération).",
+    "Source officielle équivalente : FRED, séries DGS3MO et DGS10 (non branchée dans npm run fetch)."
+  ]
+}

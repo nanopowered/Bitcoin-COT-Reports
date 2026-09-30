@@ -1,0 +1,120 @@
+//@version=5
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// Prime des futures bitcoin CME (annualisée) face au taux du Trésor américain à 3 mois
+// Dépôt Bitcoin-COT-Reports : reproduit le panneau « prime des futures » du graphique
+// output/graphique.html (calcul identique à src/analysis/carry.ts).
+//
+// • Prime d'une séance = (F2 / F1 − 1) × 365 / jours entre les deux échéances × 100, où F1 et F2 sont
+//   les clôtures du même jour des deux premiers contrats CME (CME:BTC1!, CME:BTC2!). Échéance = dernier
+//   vendredi du mois (jours fériés ignorés). Valeur affichée : médiane des N dernières séances.
+// • C'est ce qu'encaisse, d'une échéance à la suivante, un vendeur de futures couvert au comptant :
+//   un arbitrage cash-and-carry. L'écart avec le taux à 3 mois est son gain avant frais, marge
+//   immobilisée et coût de financement. Le COT ne dit pas si un vendeur de futures arbitre ou parie.
+// • Taux de référence : le 3 mois, l'horizon de l'arbitrage (financé à court terme). Le 10 ans est
+//   proposé pour comparaison seulement.
+// • Affichage : chaque courbe se montre ou se masque dans Paramètres → Style. L'écart en ligne et le
+//   10 ans y sont décochés par défaut.
+// • Sur un graphique hebdomadaire ou plus long, chaque barre prend la dernière séance de la période.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+indicator("Prime des futures bitcoin CME et taux à 3 mois", shorttitle = "Prime CME", format = format.percent, precision = 2)
+
+DAY_MS     = 86400000
+CARRY_COL  = #d55181
+RATE_COL   = #898781
+EXCESS_COL = #9085e9
+LONG_COL   = #008300
+
+// ───────────── Entrées ─────────────
+rateSym   = input.symbol("TVC:US03MY", "Taux de référence", tooltip = "Bon du Trésor américain à 3 mois : l'horizon de l'arbitrage, qui se finance à court terme.")
+sessions  = input.int(5, "Médiane sur N séances", options = [1, 3, 5], tooltip = "5, comme dans le dépôt. Ignoré sur un graphique hebdomadaire ou plus long.")
+showTable = input.bool(true, "Tableau de la dernière séance")
+
+// ───────────── Échéances CME ─────────────
+// Dernier vendredi du mois `m` de l'année `y`, à 00:00 UTC.
+lastFriday(int y, int m) =>
+    int ny      = m == 12 ? y + 1 : y
+    int nm      = m == 12 ? 1 : m + 1
+    int lastDay = timestamp("UTC", ny, nm, 1, 0, 0) - DAY_MS
+    lastDay - ((dayofweek(lastDay, "UTC") - dayofweek.friday + 7) % 7) * DAY_MS
+
+// Jours entre les échéances des deux premiers contrats à la séance `d` (00:00 UTC). Le jour d'échéance,
+// le 1er contrat est encore celui qui expire.
+expiryGapDays(int d) =>
+    int y  = year(d, "UTC")
+    int m  = month(d, "UTC")
+    int e1 = lastFriday(y, m)
+    if e1 < d
+        y  := m == 12 ? y + 1 : y
+        m  := m == 12 ? 1 : m + 1
+        e1 := lastFriday(y, m)
+    int y2 = m == 12 ? y + 1 : y
+    int m2 = m == 12 ? 1 : m + 1
+    (lastFriday(y2, m2) - e1) / DAY_MS
+
+// ───────────── Données ─────────────
+// Séances CME : time_tradingday donne la date de séance, quelle que soit l'heure d'ouverture de la barre.
+[f1, d1] = request.security("CME:BTC1!", "D", [close, time_tradingday], ignore_invalid_symbol = true)
+[f2, d2] = request.security("CME:BTC2!", "D", [close, time_tradingday], ignore_invalid_symbol = true)
+rate     = request.security(rateSym, "D", close, ignore_invalid_symbol = true)
+rateLong = request.security("TVC:US10Y", "D", close, ignore_invalid_symbol = true)
+
+// Nouvelle séance commune aux deux contrats : une valeur de prime par séance.
+newSession = not na(d1) and not na(d2) and d1 == d2 and not na(f1) and not na(f2) and f1 > 0 and (na(d1[1]) or d1 != d1[1])
+dailyCarry = (f2 / f1 - 1) * 365 / expiryGapDays(d1) * 100
+
+s0 = ta.valuewhen(newSession, dailyCarry, 0)
+s1 = ta.valuewhen(newSession, dailyCarry, 1)
+s2 = ta.valuewhen(newSession, dailyCarry, 2)
+s3 = ta.valuewhen(newSession, dailyCarry, 3)
+s4 = ta.valuewhen(newSession, dailyCarry, 4)
+lastSession = ta.valuewhen(newSession, d1, 0)
+
+// Médiane des n dernières séances (au moins 3 si n ≥ 3), comme le dépôt.
+medianOf(float a, float b, float c, float d, float e, int n) =>
+    float[] xs = array.new_float()
+    if not na(a)
+        array.push(xs, a)
+    if n >= 3
+        if not na(b)
+            array.push(xs, b)
+        if not na(c)
+            array.push(xs, c)
+    if n >= 5
+        if not na(d)
+            array.push(xs, d)
+        if not na(e)
+            array.push(xs, e)
+    array.size(xs) >= math.min(n, 3) ? array.median(xs) : na
+
+n      = timeframe.isintraday or timeframe.isdaily ? sessions : 1
+carry  = medianOf(s0, s1, s2, s3, s4, n)
+excess = carry - rate
+
+// ───────────── Tracés : cases à cocher dans Paramètres → Style ─────────────
+hline(0, "Zéro", color.new(color.gray, 30))
+pCarry = plot(carry, "Prime des futures CME (% par an)", CARRY_COL, 2)
+pRate  = plot(rate, "Taux US à 3 mois (%)", RATE_COL, 1)
+fill(pCarry, pRate, carry > rate ? color.new(CARRY_COL, 80) : na, "Écart positif (arbitrage rentable avant frais)")
+plot(excess, "Écart prime − taux 3 mois (points)", EXCESS_COL, 1, display = display.none)
+plot(rateLong, "Taux US à 10 ans (%)", LONG_COL, 1, display = display.none)
+
+// ───────────── Tableau de la dernière séance ─────────────
+fmt(float x, bool signedFmt) =>
+    na(x) ? "—" : (signedFmt and x >= 0 ? "+" : "") + str.tostring(x, "0.00")
+
+var table tb = table.new(position.top_right, 2, 4, bgcolor = color.new(chart.bg_color, 15))
+if showTable and barstate.islast
+    ink = chart.fg_color
+    dateTxt = na(lastSession) ? "Données CME indisponibles" : "Séance du " + str.format_time(lastSession, "dd/MM/yyyy", "UTC")
+    table.cell(tb, 0, 0, dateTxt, text_color = ink, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 1, 0, "", text_color = ink, text_size = size.small)
+    table.cell(tb, 0, 1, "Prime CME", text_color = CARRY_COL, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 1, 1, fmt(carry, false) + " %", text_color = ink, text_size = size.small, text_halign = text.align_right)
+    table.cell(tb, 0, 2, "Taux 3 mois", text_color = RATE_COL, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 1, 2, fmt(rate, false) + " %", text_color = ink, text_size = size.small, text_halign = text.align_right)
+    table.cell(tb, 0, 3, "Écart", text_color = EXCESS_COL, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 1, 3, fmt(excess, true) + " pt", text_color = ink, text_size = size.small, text_halign = text.align_right)
+
+// ───────────── Alertes ─────────────
+alertcondition(ta.crossunder(excess, 0), "Prime CME sous le taux à 3 mois", "La prime des futures bitcoin CME passe sous le taux à 3 mois : l'arbitrage cash-and-carry ne rapporte plus rien, avant frais.")
+alertcondition(ta.crossover(excess, 0), "Prime CME au-dessus du taux à 3 mois", "La prime des futures bitcoin CME repasse au-dessus du taux à 3 mois.")

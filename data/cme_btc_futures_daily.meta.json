@@ -1,0 +1,13 @@
+{
+  "source": "TradingView CME:BTC1! et CME:BTC2! (contrats continus, 1D) via tvremix get_ohlcv",
+  "retrievedAt": "2026-09-30T09:44:49Z",
+  "rows": 2210,
+  "first": "2017-12-18",
+  "last": "2026-09-29",
+  "notes": [
+    "f1 = contrat le plus proche de l’échéance, f2 = contrat suivant ; clôture quotidienne telle que publiée par TradingView (la source ne précise pas si c’est le cours de règlement).",
+    "Date = séance CME, déduite de l’horodatage TradingView (voir src/market/tradingview.ts : l’horodatage a changé le 29/05/2026).",
+    "Séances du 2026-09-30 et après écartées (en cours à la récupération). Séances présentes dans une seule des deux séries, écartées : aucune.",
+    "Aucune source officielle gratuite des règlements CME historiques : ce fichier ne se reconstruit qu’à partir de data/raw/tradingview/."
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "name": "bitcoin-cot-reports",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Suivi reproductible du COT bitcoin (CFTC Legacy Futures Only, CME 133741) et confrontation à la lecture de Tom McClellan",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "fetch": "node src/cli/fetch.ts",
+    "track": "node src/cli/track.ts",
+    "backtest": "node src/cli/backtest.ts",
+    "compare": "node src/cli/compare.ts",
+    "carry": "node src/cli/carry.ts",
+    "chart": "node --disable-warning=ExperimentalWarning src/cli/chart.ts",
+    "all": "npm run track && npm run backtest && npm run compare && npm run carry && npm run chart",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.3"
+  }
+}

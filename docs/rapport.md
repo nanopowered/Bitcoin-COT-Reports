@@ -1,6 +1,6 @@
 # McClellan et le COT bitcoin : suivi, backtest, confrontation
 
-*Rapport du 29/09/2026. Dernier COT disponible : arrêté au 22/09/2026, publié le 25/09. Prix : clôtures quotidiennes UTC BTCUSDT jusqu'au 28/09/2026.*
+*Rapport du 29/09/2026, section 6 (prime des futures) ajoutée le 30/09/2026. Dernier COT disponible : arrêté au 22/09/2026, publié le 25/09. Prix : clôtures quotidiennes UTC BTCUSDT jusqu'au 28/09/2026.*
 
 Conventions de lecture :
 - **« Il écrit »** : les citations littérales de McClellan, ou ton résumé de sa lecture (c'est précisé à chaque fois).
@@ -37,6 +37,10 @@ Conventions de lecture :
    - La reconstruction suivante, lue comme une reprise de conviction, vient d'un rachat de shorts (−1 800) pendant que les longs **baissent** (−856).
 6. **Ses deux commentaires de conviction (14/08 et 25/09) sont exacts.** Record de positionnement à 1 % près le 14/08 ; ajout net le 25/09, modeste (+288).
 7. **Le bilan de ses appels reste haussier et, jusqu'ici, gagnant** (+32,4 % du 14/08 au 28/09). C'est un seul épisode : il ne valide pas la méthode.
+8. **La prime des futures éclaire les shorts non commerciaux** (section 6, tout calculé).
+   - L'écart entre la prime CME annualisée et le taux à 3 mois est ce que rapporte un arbitrage cash-and-carry : +8,4 points en médiane en 2020, +1,4 en 2026.
+   - Plus il est large, plus les shorts non commerciaux pèsent dans l'OI (corrélation de rang +0,45 sur 2018-2026) : un net short peut n'être que la jambe couverte d'un arbitrage.
+   - Les passages net short à écart faible ont été suivis d'une médiane de −10,6 % à 13 semaines, contre +3,1 % à écart large. Non significatif (p = 0,21, 10 + 10 passages).
 
 ---
 
@@ -46,6 +50,8 @@ Conventions de lecture :
 |---|---|---|---|
 | COT | CFTC Legacy Futures Only, BITCOIN — CME, code 133741, via les séries COT de TradingView (`COT:133741_F_OI`, `_NCP_L/S/SPREAD`, `_CP_L/S`, `_NRP_L/S`) | 442 semaines, 10/04/2018 → 22/09/2026 | Les deux identités CFTC (OI = somme des longs = somme des shorts) tiennent sur les 442 semaines ; aucune semaine manquante |
 | Prix | BINANCE:BTCUSDT, bougies quotidiennes UTC | 11/03/2018 → 28/09/2026 | Aucun jour manquant ; bougie du 29/09 (incomplète) écartée |
+| Futures CME | CME:BTC1! et CME:BTC2! (deux premiers contrats, séries continues TradingView), clôtures quotidiennes | 18/12/2017 → 29/09/2026 | Date de séance déduite de l'horodatage TradingView, qui a changé le 29/05/2026 ; contrôlée contre le spot Binance |
+| Taux US | TVC:US03MY (bon à 3 mois) et TVC:US10Y (10 ans), % par an | 01/07/2016 → 29/09/2026 | Séance du 30/09 (en cours) écartée |
 
 **Pourquoi TradingView et pas la CFTC directement ?**
 - L'environnement cloud de cette analyse n'avait pas accès à `cftc.gov`, `publicreporting.cftc.gov` ni aux API de prix (politique réseau).
@@ -189,7 +195,34 @@ Avant 2021, les commerciaux sont quasi absents : aucun contrat long commercial 1
 
 ---
 
-## 6. Limites
+## 6. La prime des futures : quand les shorts peuvent être de l'arbitrage
+
+Détail et tableaux : `output/prime.md` (`npm run carry`). Tous les chiffres de cette section sont **calculés**, sauf les taux du Trésor.
+
+**Ce qu'on mesure.**
+- Prime = (2e contrat ÷ 1er − 1) × 365 ÷ jours entre leurs échéances, en % par an, médiane des 5 séances CME jusqu'au mardi d'arrêté.
+- C'est ce qu'encaisse, d'une échéance à la suivante, un fonds qui achète le bitcoin au comptant (ou un ETF) et vend le future : l'arbitrage cash-and-carry. Son short est une couverture, pas un pari à la baisse.
+- Deux contrats du même marché, clôturés au même instant : pas de décalage horaire avec le spot. Une seconde mesure (1er contrat contre spot Binance) donne des médianes annuelles proches (2020 : 8,9 % contre 8,7 % ; 2025 : 7,9 % contre 8,0 %).
+
+**Face à quel taux ?** Le taux à 3 mois, pas le 10 ans.
+- L'arbitrage dure un à deux mois et se finance à court terme. Son coût d'opportunité est le placement monétaire, pas une obligation à 10 ans.
+- Une même prime ne rapporte pas la même chose selon les taux. 2020 : prime 8,9 %, taux 0,1 %, écart +8,4 points. 2023 : prime 8,3 %, mais taux 5,3 %, écart +2,9 points seulement.
+- Les données départagent mal les deux taux. Corrélation de rang entre la part des shorts non commerciaux dans l'OI et la mesure : prime brute +0,38, écart au 3 mois +0,45, écart au 10 ans +0,45 sur 2018-2026 ; depuis 2022, +0,51, +0,57 et +0,52. En variations sur 13 semaines, les liens sont faibles (+0,12 à +0,36) et reposent sur 15 à 33 paires.
+
+**Quel écart rend l'arbitrage intéressant ?** Aucun seuil observable.
+- L'écart ne compte pas les frais (ETF, CME, courtage), la marge immobilisée sur le future, le surcoût de financement d'un fonds par rapport au Trésor, ni le risque d'appel de marge si le prix bondit. Le seuil de rentabilité est donc au-dessus de zéro et propre à chaque acteur.
+- Ce que montrent les données : les shorts non commerciaux pèsent le plus lourd les années d'écart large (2020 : 87,9 % de l'OI, écart +8,4 points ; 2024 : 82,8 %, +5,6 points) et le moins en 2026 (67,9 %, +1,4 point). Au 22/09/2026 : prime 5,4 %, taux 4,1 %, écart +1,3 point.
+
+**Passages net short et écart du moment.**
+- Les 20 passages exploitables depuis 2022, coupés en deux à l'écart médian (+2,8 points).
+- Écart faible : médiane −10,6 % à 13 semaines. Écart large : +3,1 %.
+- C'est dans le sens de l'intuition (un net short sans arbitrage rentable dit davantage), mais **non significatif** (p = 0,21). Le groupe à écart faible mêle deux cas opposés : le début du marché baissier de 2022 (−31 % à −58 %) et la capitulation de fin 2022, prime négative, suivie de +53 % à +65 %.
+
+**Lecture pour McClellan.** Ce qu'il écrit : « Tops tend to come once these traders have crossed over to the net short side in a big way ». Ce que la donnée ajoute : un net short « en grand » pendant que l'écart est large peut n'être que de l'arbitrage. C'est le cas de 2019-2021 (écart de +3 à +8 points en médiane annuelle, nets courts toute la période, bitcoin en forte hausse). En 2018, à l'inverse, l'écart est négatif (−2,1 points en médiane) : ces shorts ne pouvaient pas être un arbitrage rentable, et le bitcoin a baissé (6 844 $ le 10/04, 3 703 $ le 31/12). Un seul épisode de chaque côté : c'est une piste, pas une règle. Le graphique affiche la prime et le taux sous les positions pour le vérifier semaine par semaine.
+
+---
+
+## 7. Limites
 
 - **Échantillon.**
   - 20 passages net short exploitables, dont 11 fenêtres de 13 semaines indépendantes, et 1 à 6 événements « marqués ».
@@ -202,15 +235,16 @@ Avant 2021, les commerciaux sont quasi absents : aucun contrat long commercial 1
   - Snapshot TradingView en attendant le contrôle croisé CFTC (`npm run fetch`).
   - Contrat standard 133741 seulement : ni le Micro (133742), ni le rapport TFF.
   - Prix spot Binance, pas le future CME. Clôture à minuit UTC, contre environ 21-22 h UTC pour l'arrêté CME du mardi.
+  - Prime : contrats continus TradingView (date de roulement non documentée, clôture peut-être pas au règlement). En 2018-2019, le pas de cotation de 5 $ vaut à lui seul 1 à 2 points de prime annualisée.
 - **Calendrier.** Les décalages de publication d'un à trois jours lors des semaines fériées ne sont pas modélisés. Seuls les deux shutdowns le sont.
 
-## 7. Reproduire
+## 8. Reproduire
 
 ```bash
 npm install            # TypeScript et @types/node, pour le typage uniquement
 npm run fetch          # source officielle CFTC + Binance, avec contrôle croisé du snapshot
-npm run all            # suivi.csv, signaux.md, backtest.md, comparaison.md
-npm test               # 38 tests, dont non-régression sur les valeurs publiées
+npm run all            # suivi.csv, signaux.md, backtest.md, comparaison.md, prime.md, graphique.html
+npm test               # 48 tests, dont non-régression sur les valeurs publiées
 ```
 
 Node ≥ 22.18 exécute le TypeScript directement : aucune étape de build.

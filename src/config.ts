@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import type { CotLegacyRow } from './types.ts';
 import { checkIntegrity, readCotCsv } from './cot/legacy.ts';
+import { readFuturesCsv, type FuturesDay } from './market/futures.ts';
+import { readRatesCsv, type RateDay } from './market/rates.ts';
 import { indexPrices, readPriceCsv, type PriceIndex } from './price/prices.ts';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -13,6 +15,10 @@ export const cotCsvPath = (code: string) => join(DATA_DIR, `cot_legacy_${code}.c
 export const cotMetaPath = (code: string) => join(DATA_DIR, `cot_legacy_${code}.meta.json`);
 export const PRICE_CSV = join(DATA_DIR, 'btc_usdt_daily.csv');
 export const PRICE_META = join(DATA_DIR, 'btc_usdt_daily.meta.json');
+export const FUTURES_CSV = join(DATA_DIR, 'cme_btc_futures_daily.csv');
+export const FUTURES_META = join(DATA_DIR, 'cme_btc_futures_daily.meta.json');
+export const RATES_CSV = join(DATA_DIR, 'us_rates_daily.csv');
+export const RATES_META = join(DATA_DIR, 'us_rates_daily.meta.json');
 
 export interface Dataset {
   code: string;
@@ -43,5 +49,22 @@ export function loadDataset(code = '133741'): Dataset {
     px: indexPrices(readPriceCsv(PRICE_CSV)),
     cotSource: sourceOf(cotMetaPath(code)),
     priceSource: sourceOf(PRICE_META),
+  };
+}
+
+/** Futures CME (deux premiers contrats) et taux du Trésor américain : entrées du calcul de la prime. */
+export interface MarketData {
+  futures: FuturesDay[];
+  rates: RateDay[];
+  futuresSource: string;
+  ratesSource: string;
+}
+
+export function loadMarket(): MarketData {
+  return {
+    futures: readFuturesCsv(FUTURES_CSV),
+    rates: readRatesCsv(RATES_CSV),
+    futuresSource: sourceOf(FUTURES_META),
+    ratesSource: sourceOf(RATES_META),
   };
 }

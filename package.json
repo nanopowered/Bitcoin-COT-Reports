@@ -13,8 +13,9 @@
     "track": "node src/cli/track.ts",
     "backtest": "node src/cli/backtest.ts",
     "compare": "node src/cli/compare.ts",
+    "carry": "node src/cli/carry.ts",
     "chart": "node --disable-warning=ExperimentalWarning src/cli/chart.ts",
-    "all": "npm run track && npm run backtest && npm run compare && npm run chart",
+    "all": "npm run track && npm run backtest && npm run compare && npm run carry && npm run chart",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json",
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.ts"
   },

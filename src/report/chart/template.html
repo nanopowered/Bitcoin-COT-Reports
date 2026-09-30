@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600;700&display=swap">
 <style>
-  /* Mise en page : une colonne ; la carte du graphique d'abord (commandes au-dessus du tracé, prix en haut,
-     positions en bas, axe du temps partagé), l'encadré de lecture ensuite, la méthode en pied de page. */
+  /* Mise en page : une colonne ; la carte du graphique d'abord (commandes au-dessus du tracé ; prix, positions
+     et prime des futures empilés sur un axe du temps partagé), l'encadré de lecture ensuite, la méthode en pied de page. */
   :root {
     --page: #f9f9f7;
     --surface: #fcfcfb;
@@ -19,6 +19,7 @@
     --s1: #2a78d6;
     --s2: #eb6834;
     --s3: #1baf7a;
+    --s4: #eda100;
     --price: #44423d;
     --focus: #2a78d6;
     --font-ui: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -39,6 +40,7 @@
       --s1: #3987e5;
       --s2: #d95926;
       --s3: #199e70;
+      --s4: #c98500;
       --price: #d3d1c7;
       --focus: #3987e5;
       color-scheme: dark;
@@ -58,6 +60,7 @@
     --s1: #3987e5;
     --s2: #d95926;
     --s3: #199e70;
+    --s4: #c98500;
     --price: #d3d1c7;
     --focus: #3987e5;
     color-scheme: dark;
@@ -183,6 +186,12 @@
   .fill-nc { fill: var(--s1); }
   .fill-c { fill: var(--s2); }
   .fill-nr { fill: var(--s3); }
+  .stroke-carry { stroke: var(--s4); }
+  .fill-carry { fill: var(--s4); }
+  .stroke-rate { stroke: var(--ink-2); stroke-dasharray: 5 4; stroke-linecap: butt; }
+  .fill-rate { fill: var(--ink-2); }
+  .chip .key-line.stroke-rate { stroke-width: 2.5; stroke-dasharray: 4 3; stroke-linecap: butt; }
+  .excess-fill { fill: var(--s4); opacity: 0.2; stroke: none; }
   .dot { stroke: var(--surface); stroke-width: 2; }
   .hgrid, .vgrid { stroke: var(--grid); stroke-width: 1; }
   .zero { stroke: var(--axis); stroke-width: 1; }
@@ -221,6 +230,7 @@
     padding-block: 3px;
   }
   .tip-row svg { align-self: center; overflow: visible; }
+  .tip-row .key-line { stroke-width: 2.5; }
   .tip-row strong { font-weight: 650; font-variant-numeric: tabular-nums; }
   .tip-row .name { color: var(--ink-2); }
   .tip-row small { grid-column: 2 / -1; color: var(--ink-2); font-size: 11.5px; font-variant-numeric: tabular-nums; }
@@ -282,7 +292,7 @@
   <header class="masthead">
     <p class="eyebrow"><span>CFTC · rapport Legacy, futures seuls</span><span>Bitcoin · CME · code 133741</span></p>
     <h1>Positions COT du bitcoin</h1>
-    <p class="lede">Position nette de chaque catégorie de traders sur les futures bitcoin du CME, semaine par semaine, face au prix du bitcoin. Cliquez sur une catégorie pour l’afficher ou la masquer.</p>
+    <p class="lede">Position nette de chaque catégorie de traders sur les futures bitcoin du CME, semaine par semaine, face au prix du bitcoin. En bas, la prime des futures face au taux à 3 mois : l’écart ombré est ce que rapporte un arbitrage cash-and-carry. Cliquez sur une série pour l’afficher ou la masquer.</p>
     <p class="asof" id="asof"></p>
   </header>
 
@@ -300,7 +310,7 @@
         </div>
       </div>
     </div>
-    <div class="legend" role="group" aria-label="Catégories et repères affichés" id="legend"></div>
+    <div class="legend" role="group" aria-label="Séries et repères affichés" id="legend"></div>
     <div class="plot" id="plot" tabindex="0" aria-describedby="plot-help">
       <svg id="chart" role="img" aria-labelledby="chart-desc"><desc id="chart-desc"></desc></svg>
       <div class="tip" id="tip" hidden></div>
@@ -325,6 +335,7 @@
     <p>Position nette = positions longues − positions courtes d’une catégorie ; en % de l’intérêt ouvert (OI) pour comparer 2018 et 2026, l’OI ayant été multiplié par plus de dix. Valeurs calculées à partir des positions publiées par la CFTC ; les positions « spread » des non-commerciaux, à la fois longues et courtes, n’entrent pas dans le net.</p>
     <p>Non-commerciaux : grands spéculateurs déclarés (fonds, gérants, négociants). Commerciaux : intervenants déclarés au titre de la couverture. Non-déclarants : positions sous le seuil de déclaration, déduites par la CFTC de l’OI total.</p>
     <p>Positions arrêtées le mardi et publiées le vendredi ; le graphique les place au mardi. Prix : clôtures quotidiennes UTC, échelle logarithmique.</p>
+    <p>Prime des futures (calculée) : (2e contrat ÷ 1er − 1) × 365 ÷ jours entre leurs échéances, médiane des cinq séances CME jusqu’au mardi d’arrêté. C’est ce qu’encaisse, d’une échéance à la suivante, un vendeur de futures couvert au comptant. Le taux de référence est celui du bon du Trésor américain à 3 mois, l’horizon de cet arbitrage ; le gain réel est plus faible (frais, marge immobilisée, coût de financement), et le COT ne dit pas si un vendeur arbitre ou parie.</p>
   </footer>
 </main>
 <!--DATA-->

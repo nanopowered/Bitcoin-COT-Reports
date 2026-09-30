@@ -5,8 +5,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
+import { weeklyCarry } from '../analysis/carry.ts';
 import { buildTracker, DEFAULT_TRACKER_OPTIONS } from '../analysis/tracker.ts';
-import { loadDataset, OUTPUT_DIR } from '../config.ts';
+import { loadDataset, loadMarket, OUTPUT_DIR } from '../config.ts';
 import { buildChartData } from '../report/chart/build.ts';
 import { asFragment, asStandalone, renderChartPage } from '../report/chart/page.ts';
 
@@ -18,7 +19,17 @@ const { values } = parseArgs({
 });
 
 const ds = loadDataset(values.code);
-const page = renderChartPage(buildChartData(ds, buildTracker(ds.cot, DEFAULT_TRACKER_OPTIONS)));
+const market = loadMarket();
+const t = buildTracker(ds.cot, DEFAULT_TRACKER_OPTIONS);
+const carry = {
+  weeks: weeklyCarry(
+    t.map((r) => r.asOf),
+    market.futures,
+    market.rates,
+  ),
+  source: `${market.futuresSource} ; taux : ${market.ratesSource}`,
+};
+const page = renderChartPage(buildChartData(ds, t, carry));
 mkdirSync(OUTPUT_DIR, { recursive: true });
 const out = join(OUTPUT_DIR, 'graphique.html');
 const html = asStandalone(page);

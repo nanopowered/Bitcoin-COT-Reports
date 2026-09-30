@@ -12,7 +12,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { checkIntegrity, writeCotCsv } from '../src/cot/legacy.ts';
 import { rowsFromTradingView, TV_LEGACY_METRICS, tvSymbol, type TvMetric, type TvSeries } from '../src/cot/tradingview.ts';
-import { cotCsvPath, cotMetaPath, DATA_DIR, PRICE_CSV, PRICE_META } from '../src/config.ts';
+import { cotCsvPath, cotMetaPath, DATA_DIR, FUTURES_CSV, FUTURES_META, PRICE_CSV, PRICE_META, RATES_CSV, RATES_META } from '../src/config.ts';
+import { writeFuturesCsv, type FuturesDay } from '../src/market/futures.ts';
+import { writeRatesCsv, type RateDay } from '../src/market/rates.ts';
+import { closesBySession } from '../src/market/tradingview.ts';
 import { writePriceCsv } from '../src/price/prices.ts';
 import type { PriceBar, SourceMeta } from '../src/types.ts';
 import { fromUnixSeconds, weekday } from '../src/util/dates.ts';
@@ -69,3 +72,63 @@ const priceMeta: SourceMeta = {
 };
 writeFileSync(PRICE_META, JSON.stringify(priceMeta, null, 2) + '\n');
 console.log(`BTC : ${bars.length} jours, ${priceMeta.first} → ${priceMeta.last}`);
+
+// --- Futures CME (deux premiers contrats) et taux du Trésor américain ---
+// Récupérés le 30/09/2026 (heures UTC ci-dessous) : la séance du 30/09 était en cours, elle est écartée.
+const MARKET_CUTOFF = '2026-09-30';
+const MARKET_RAW = {
+  f1: { file: 'CME_BTC1_1D.json', retrievedAt: '2026-09-30T09:42:22Z' },
+  f2: { file: 'CME_BTC2_1D.json', retrievedAt: '2026-09-30T09:44:49Z' },
+  us03m: { file: 'TVC_US03MY_1D.json', retrievedAt: '2026-09-30T10:20:35Z' },
+  us10y: { file: 'TVC_US10Y_1D.json', retrievedAt: '2026-09-30T10:20:37Z' },
+} as const;
+const market = Object.fromEntries(
+  Object.entries(MARKET_RAW).map(([k, { file }]) => {
+    const s = readRaw(file);
+    return [k, { symbol: s.symbol, closes: closesBySession(s, MARKET_CUTOFF) }];
+  }),
+) as Record<keyof typeof MARKET_RAW, { symbol: string; closes: Map<string, number> }>;
+
+const futures: FuturesDay[] = [...market.f1.closes]
+  .filter(([d]) => market.f2.closes.has(d))
+  .map(([date, f1]) => ({ date, f1, f2: market.f2.closes.get(date) as number }))
+  .sort((a, b) => a.date.localeCompare(b.date));
+const onlyOne = [...market.f1.closes.keys(), ...market.f2.closes.keys()].filter((d) => !(market.f1.closes.has(d) && market.f2.closes.has(d)));
+writeFuturesCsv(FUTURES_CSV, futures);
+const futuresMeta: SourceMeta = {
+  source: `TradingView ${market.f1.symbol} et ${market.f2.symbol} (contrats continus, 1D) via tvremix get_ohlcv`,
+  retrievedAt: MARKET_RAW.f2.retrievedAt,
+  rows: futures.length,
+  first: futures[0]?.date ?? '',
+  last: futures[futures.length - 1]?.date ?? '',
+  notes: [
+    'f1 = contrat le plus proche de l’échéance, f2 = contrat suivant ; clôture quotidienne telle que publiée par TradingView (la source ne précise pas si c’est le cours de règlement).',
+    'Date = séance CME, déduite de l’horodatage TradingView (voir src/market/tradingview.ts : l’horodatage a changé le 29/05/2026).',
+    `Séances du ${MARKET_CUTOFF} et après écartées (en cours à la récupération). Séances présentes dans une seule des deux séries, écartées : ${onlyOne.length ? [...new Set(onlyOne)].sort().join(', ') : 'aucune'}.`,
+    'Aucune source officielle gratuite des règlements CME historiques : ce fichier ne se reconstruit qu’à partir de data/raw/tradingview/.',
+  ],
+};
+writeFileSync(FUTURES_META, JSON.stringify(futuresMeta, null, 2) + '\n');
+console.log(`Futures CME : ${futures.length} séances, ${futuresMeta.first} → ${futuresMeta.last}`);
+
+const rateDates = [...new Set([...market.us03m.closes.keys(), ...market.us10y.closes.keys()])].sort();
+const rates: RateDay[] = rateDates.map((date) => ({
+  date,
+  us03m: market.us03m.closes.get(date) ?? null,
+  us10y: market.us10y.closes.get(date) ?? null,
+}));
+writeRatesCsv(RATES_CSV, rates);
+const ratesMeta: SourceMeta = {
+  source: `TradingView ${market.us03m.symbol} et ${market.us10y.symbol} (1D) via tvremix get_ohlcv`,
+  retrievedAt: MARKET_RAW.us10y.retrievedAt,
+  rows: rates.length,
+  first: rates[0]?.date ?? '',
+  last: rates[rates.length - 1]?.date ?? '',
+  notes: [
+    'Rendements en % par an : bon du Trésor à 3 mois (us03m) et obligation à 10 ans (us10y). Cellule vide : pas de cotation ce jour-là pour ce taux.',
+    `Séances du ${MARKET_CUTOFF} et après écartées (en cours à la récupération).`,
+    'Source officielle équivalente : FRED, séries DGS3MO et DGS10 (non branchée dans npm run fetch).',
+  ],
+};
+writeFileSync(RATES_META, JSON.stringify(ratesMeta, null, 2) + '\n');
+console.log(`Taux US : ${rates.length} séances, ${ratesMeta.first} → ${ratesMeta.last}`);

@@ -7,6 +7,12 @@
  */
 export type WeekTuple = [string, number, number, number, number, number, number, number, number, string | null];
 
+/**
+ * [prime des futures CME annualisée (calculée), taux du Trésor à 3 mois (source)], en % par an, à la date
+ * d'arrêté de la semaine de même rang dans `weeks` ; null si la donnée manque.
+ */
+export type CarryTuple = [number | null, number | null];
+
 export type RangeKey = 'all' | 'shortEra' | 'oscillation' | 'y2026' | 'mcclellan';
 
 export interface RangePreset {
@@ -40,6 +46,9 @@ export interface ChartData {
   lastAsOf: string;
   lastPublication: string | null;
   weeks: WeekTuple[];
+  /** Une paire par semaine de `weeks`. */
+  carry: CarryTuple[];
+  carrySource: string;
   /** Date de la première clôture de `closes` ; les clôtures sont quotidiennes et consécutives. */
   priceStart: string;
   closes: number[];

@@ -1,12 +1,23 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { weeklyCarry } from '../src/analysis/carry.ts';
 import { buildTracker, DEFAULT_TRACKER_OPTIONS } from '../src/analysis/tracker.ts';
-import { loadDataset } from '../src/config.ts';
+import { loadDataset, loadMarket } from '../src/config.ts';
 import { buildChartData, jsonForScript } from '../src/report/chart/build.ts';
 import { asFragment, asStandalone, renderChartPage } from '../src/report/chart/page.ts';
 
 const ds = loadDataset('133741');
-const data = buildChartData(ds, buildTracker(ds.cot, DEFAULT_TRACKER_OPTIONS), 500);
+const market = loadMarket();
+const tracker = buildTracker(ds.cot, DEFAULT_TRACKER_OPTIONS);
+const carry = {
+  weeks: weeklyCarry(
+    tracker.map((r) => r.asOf),
+    market.futures,
+    market.rates,
+  ),
+  source: 'test',
+};
+const data = buildChartData(ds, tracker, carry, 500);
 
 test('données du graphique : semaines, passages net short, éditions, périodes', () => {
   assert.equal(data.weeks.length, 442);
@@ -21,6 +32,14 @@ test('données du graphique : semaines, passages net short, éditions, périodes
     ['all', 'shortEra', 'oscillation', 'y2026', 'mcclellan'],
   );
   for (const r of data.ranges) assert.ok(r.from < r.to, r.key);
+  // Une paire prime / taux par semaine, arrondie au centième.
+  assert.equal(data.carry.length, data.weeks.length);
+  for (const [c, r] of data.carry) {
+    assert.ok(c !== null && Number.isFinite(c) && Math.abs(c * 100 - Math.round(c * 100)) < 1e-9, String(c));
+    assert.ok(r !== null && Number.isFinite(r), String(r));
+  }
+  assert.deepEqual(data.carry.at(-1), [5.45, 4.11]);
+  assert.ok(data.guide.some((g) => g.period === 'prime des futures'));
   // Les trois nets que le navigateur calcule à partir des tuples se somment à zéro.
   for (const [, , ncL, ncS, , cL, cS, nrL, nrS] of data.weeks) assert.equal(ncL - ncS + (cL - cS) + (nrL - nrS), 0);
 });

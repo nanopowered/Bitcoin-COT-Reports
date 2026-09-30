@@ -8,6 +8,7 @@ declare const DATA: ChartData;
 
 (() => {
   type SeriesKey = 'nc' | 'c' | 'nr';
+  type CarryKey = 'carry' | 'rate';
   type Unit = 'pct' | 'ctr';
   type LayerKey = 'cross' | 'mcc';
   type Attrs = Record<string, string | number>;
@@ -20,6 +21,8 @@ declare const DATA: ChartData;
     short: Record<SeriesKey, number>;
     net: Record<SeriesKey, number>;
     pct: Record<SeriesKey, number>;
+    /** Prime des futures CME annualisée (calculée) et taux à 3 mois, % par an. */
+    rates: Record<CarryKey, number | null>;
     pub: string | null;
     close: number | undefined;
     cross: boolean;
@@ -30,6 +33,7 @@ declare const DATA: ChartData;
     range: RangeKey;
     unit: Unit;
     visible: Record<SeriesKey, boolean>;
+    carry: Record<CarryKey, boolean>;
     layers: Record<LayerKey, boolean>;
     tableOpen: boolean;
   }
@@ -45,15 +49,25 @@ declare const DATA: ChartData;
     W: number;
     A: Box;
     B: Box;
+    C: Box;
     x: (t: number) => number;
     yPrice: (v: number) => number;
     yPos: ((v: number) => number) | null;
+    yCarry: ((v: number) => number) | null;
     inRange: Week[];
     shown: readonly Series[];
+    carryShown: readonly CarrySeries[];
   }
 
   interface Series {
     key: SeriesKey;
+    name: string;
+    short: string;
+    sub: string;
+  }
+
+  interface CarrySeries {
+    key: CarryKey;
     name: string;
     short: string;
     sub: string;
@@ -72,6 +86,10 @@ declare const DATA: ChartData;
     { key: 'nc', name: 'Non-commerciaux', short: 'Non-comm.', sub: 'grands spéculateurs' },
     { key: 'c', name: 'Commerciaux', short: 'Comm.', sub: 'couvreurs déclarés' },
     { key: 'nr', name: 'Non-déclarants', short: 'Non-décl.', sub: 'sous le seuil de déclaration' },
+  ];
+  const CARRY_SERIES: readonly CarrySeries[] = [
+    { key: 'carry', name: 'Prime des futures CME', short: 'Prime CME', sub: '2e contrat / 1er, annualisée' },
+    { key: 'rate', name: 'Taux US à 3 mois', short: 'Taux 3 mois', sub: 'bon du Trésor, référence' },
   ];
   const LAYERS: readonly { key: LayerKey; name: string }[] = [
     { key: 'cross', name: 'Passages net short' },
@@ -95,6 +113,8 @@ declare const DATA: ChartData;
   const pctText = (x: number, digits = 1) => `${signed(x, digits)}${NBSP}%`;
   const valueOf = (w: Week, k: SeriesKey, unit: Unit) => (unit === 'pct' ? w.pct[k] : w.net[k]);
   const valueText = (v: number, unit: Unit, digits = 1) => (unit === 'pct' ? pctText(v, digits) : signed(v));
+  const rateText = (v: number, digits = 1) => `${plain(v, digits)}${NBSP}%`;
+  const excessOf = (w: Week) => (w.rates.carry !== null && w.rates.rate !== null ? w.rates.carry - w.rates.rate : null);
 
   const toDay = (iso: string) => Date.parse(`${iso}T00:00:00Z`) / DAY_MS;
   const isoOfDay = (day: number) => new Date(day * DAY_MS).toISOString().slice(0, 10);
@@ -110,9 +130,10 @@ declare const DATA: ChartData;
   const crossings = new Set(DATA.crossings);
   const editions = new Map(DATA.editions.map((e) => [e.asOf, e]));
 
-  const weeks: Week[] = DATA.weeks.map(([d, oi, ncL, ncS, , cL, cS, nrL, nrS, pub]) => {
+  const weeks: Week[] = DATA.weeks.map(([d, oi, ncL, ncS, , cL, cS, nrL, nrS, pub], i) => {
     const net = { nc: ncL - ncS, c: cL - cS, nr: nrL - nrS };
     const t = toDay(d);
+    const [carry, rate] = DATA.carry[i] ?? [null, null];
     return {
       d,
       t,
@@ -121,6 +142,7 @@ declare const DATA: ChartData;
       short: { nc: ncS, c: cS, nr: nrS },
       net,
       pct: { nc: (net.nc / oi) * 100, c: (net.c / oi) * 100, nr: (net.nr / oi) * 100 },
+      rates: { carry, rate },
       pub,
       close: closeAt(t),
       cross: crossings.has(d),
@@ -134,6 +156,7 @@ declare const DATA: ChartData;
     range: 'all',
     unit: 'pct',
     visible: { nc: true, c: true, nr: true },
+    carry: { carry: true, rate: true },
     layers: { cross: true, mcc: true },
     tableOpen: false,
   };
@@ -147,6 +170,7 @@ declare const DATA: ChartData;
       if (DATA.ranges.some((r) => r.key === saved.range)) s.range = saved.range as RangeKey;
       if (saved.unit === 'pct' || saved.unit === 'ctr') s.unit = saved.unit;
       for (const { key } of SERIES) if (typeof saved.visible?.[key] === 'boolean') s.visible[key] = saved.visible[key];
+      for (const { key } of CARRY_SERIES) if (typeof saved.carry?.[key] === 'boolean') s.carry[key] = saved.carry[key];
       for (const { key } of LAYERS) if (typeof saved.layers?.[key] === 'boolean') s.layers[key] = saved.layers[key];
     } catch {
       // Stockage indisponible (navigation privée, aperçu) : état par défaut.
@@ -295,15 +319,19 @@ declare const DATA: ChartData;
 
   // ---------- Rendu ----------
 
+  /** Trois panneaux empilés qui partagent l'axe du temps : prix (A), positions (B), prime des futures (C). */
   function geometry(W: number) {
     const narrow = W < 560;
-    const H = Math.round(Math.min(580, Math.max(430, W * 0.6)));
+    const H = Math.round(Math.min(780, Math.max(580, W * 0.78)));
     const m = { l: narrow ? 46 : 58, r: narrow ? 10 : 80, t: 24, b: 30 };
     const gap = 44;
-    const hA = Math.round((H - m.t - m.b - gap) * 0.4);
+    const avail = H - m.t - m.b - 2 * gap;
+    const hA = Math.round(avail * 0.34);
+    const hB = Math.round(avail * 0.4);
     const A: Box = { x0: m.l, x1: W - m.r, y0: m.t, y1: m.t + hA };
-    const B: Box = { x0: m.l, x1: W - m.r, y0: A.y1 + gap, y1: H - m.b };
-    return { H, A, B, narrow };
+    const B: Box = { x0: m.l, x1: W - m.r, y0: A.y1 + gap, y1: A.y1 + gap + hB };
+    const C: Box = { x0: m.l, x1: W - m.r, y0: B.y1 + gap, y1: H - m.b };
+    return { H, A, B, C, narrow };
   }
 
   function pathOf(points: readonly (readonly [number, number])[]): string {
@@ -314,6 +342,40 @@ declare const DATA: ChartData;
     return d;
   }
 
+  /** Tronçons de semaines consécutives où `ok` est vrai (une donnée manquante coupe la ligne). */
+  function runsOf(list: readonly Week[], ok: (w: Week) => boolean): Week[][] {
+    const runs: Week[][] = [];
+    let cur: Week[] = [];
+    for (const w of list) {
+      if (ok(w)) cur.push(w);
+      else if (cur.length) {
+        runs.push(cur);
+        cur = [];
+      }
+    }
+    if (cur.length) runs.push(cur);
+    return runs;
+  }
+
+  /** Étiquettes directes en bout de courbe, écartées d'au moins 15 px et gardées dans le panneau. */
+  function endLabels(items: { y: number; cls: string; text: string }[], box: Box, xe: number, narrow: boolean): void {
+    const placed = [...items].sort((a, b) => a.y - b.y).map((it) => ({ ...it, yl: it.y }));
+    placed.forEach((it, i) => {
+      const prev = placed[i - 1];
+      if (prev) it.yl = Math.max(it.y, prev.yl + 15);
+    });
+    const overflow = (placed[placed.length - 1]?.yl ?? 0) - (box.y1 - 4);
+    if (overflow > 0) for (const it of placed) it.yl -= overflow;
+    for (const it of placed) {
+      svgEl('circle', { cx: xe, cy: it.y, r: 4, class: `dot fill-${it.cls}` }, svg);
+      if (narrow) continue;
+      const xl = xe + 10;
+      if (Math.abs(it.yl - it.y) > 1) svgEl('line', { x1: xe + 5, y1: it.y, x2: xl, y2: it.yl, class: 'leader' }, svg);
+      svgEl('line', { x1: xl, x2: xl + 8, y1: it.yl, y2: it.yl, class: `line stroke-${it.cls}` }, svg);
+      svgText(svg, xl + 12, it.yl + 4, it.text, { class: 'end-label' });
+    }
+  }
+
   function rangeOf(key: RangeKey) {
     return DATA.ranges.find((r) => r.key === key) ?? (DATA.ranges[0] as (typeof DATA.ranges)[number]);
   }
@@ -321,7 +383,7 @@ declare const DATA: ChartData;
   function render(): void {
     const W = Math.max(300, Math.round(plot.clientWidth));
     lastWidth = W;
-    const { H, A, B, narrow } = geometry(W);
+    const { H, A, B, C, narrow } = geometry(W);
     const range = rangeOf(state.range);
     const t0 = toDay(range.from);
     const t1 = toDay(range.to);
@@ -335,6 +397,7 @@ declare const DATA: ChartData;
     for (const [id, box] of [
       ['clip-a', A],
       ['clip-b', B],
+      ['clip-c', C],
     ] as const) {
       const cp = svgEl('clipPath', { id }, defs);
       svgEl('rect', { x: box.x0, y: box.y0 - 6, width: box.x1 - box.x0 + 6, height: box.y1 - box.y0 + 12 }, cp);
@@ -374,14 +437,39 @@ declare const DATA: ChartData;
       yPos = (v: number) => B.y1 - ((v - vMin) / (vMax - vMin)) * (B.y1 - B.y0);
     }
 
+    // Prime des futures et taux : même unité (% par an), un seul axe, zéro toujours inclus.
+    const carryShown = CARRY_SERIES.filter((s) => state.carry[s.key]);
+    const cVals = inRange.flatMap((w) => carryShown.flatMap((s) => (w.rates[s.key] === null ? [] : [w.rates[s.key] as number])));
+    let yCarry: ((v: number) => number) | null = null;
+    let carryTicks: number[] = [];
+    let carryStep = 1;
+    if (cVals.length > 0) {
+      let cMin = Math.min(0, ...cVals);
+      let cMax = Math.max(0, ...cVals);
+      const cPad = (cMax - cMin) * 0.08 || 1;
+      cMin -= cPad;
+      cMax += cPad;
+      const lt = linearTicks(cMin, cMax, narrow ? 3 : 4);
+      carryTicks = lt.ticks;
+      carryStep = lt.step;
+      yCarry = (v: number) => C.y1 - ((v - cMin) / (cMax - cMin)) * (C.y1 - C.y0);
+    }
+
     // Grille, graduations, titres de panneau.
     const grid = svgEl('g', {}, svg);
     for (const tk of timeTicks(t0, t1, A.x1 - A.x0, inRange)) {
       const xx = crisp(x(tk.t));
       if (xx < A.x0 || xx > A.x1) continue;
-      svgEl('line', { x1: xx, x2: xx, y1: A.y0, y2: A.y1, class: 'vgrid' }, grid);
-      svgEl('line', { x1: xx, x2: xx, y1: B.y0, y2: B.y1, class: 'vgrid' }, grid);
-      svgText(grid, xx, B.y1 + 19, tk.label, { class: 'tick', 'text-anchor': 'middle' });
+      for (const box of [A, B, C]) svgEl('line', { x1: xx, x2: xx, y1: box.y0, y2: box.y1, class: 'vgrid' }, grid);
+      svgText(grid, xx, C.y1 + 19, tk.label, { class: 'tick', 'text-anchor': 'middle' });
+    }
+    if (yCarry) {
+      const digits = carryStep < 1 ? 1 : 0;
+      for (const v of carryTicks) {
+        const yy = crisp(yCarry(v));
+        svgEl('line', { x1: C.x0, x2: C.x1, y1: yy, y2: yy, class: v === 0 ? 'zero' : 'hgrid' }, grid);
+        svgText(grid, C.x0 - 8, yy + 4, v === 0 ? '0' : rateText(v, digits), { class: 'tick', 'text-anchor': 'end' });
+      }
     }
     for (const v of logTicks(10 ** (lo - pad), 10 ** (hi + pad), narrow ? 4 : 5)) {
       const yy = crisp(yPrice(v));
@@ -401,6 +489,13 @@ declare const DATA: ChartData;
     svgText(svg, B.x0, B.y0 - 12, state.unit === 'pct' ? 'Position nette, en % de l’intérêt ouvert' : 'Position nette, en contrats', {
       class: 'panel-title',
     });
+    svgText(
+      svg,
+      C.x0,
+      C.y0 - 12,
+      narrow ? 'Prime CME et taux à 3 mois, % par an' : 'Prime des futures CME (2e contrat / 1er, annualisée) et taux US à 3 mois, en % par an',
+      { class: 'panel-title' },
+    );
 
     // Lignes.
     const gA = svgEl('g', { 'clip-path': 'url(#clip-a)' }, svg);
@@ -433,6 +528,30 @@ declare const DATA: ChartData;
       svgEl('path', { d: diamondPath(xx, B.y1 - 8, 5), class: 'mcc-mark' }, svg);
     }
 
+    const gC = svgEl('g', { 'clip-path': 'url(#clip-c)' }, svg);
+    if (yCarry) {
+      const y = yCarry;
+      // Écart ombré quand la prime dépasse le taux : l'aire entre les deux courbes, gardée au-dessus du taux.
+      if (state.carry.carry && state.carry.rate) {
+        runsOf(withEdges, (w) => w.rates.carry !== null && w.rates.rate !== null).forEach((run, k) => {
+          if (run.length < 2) return;
+          const carryPts = run.map((w) => [x(w.t), y(w.rates.carry as number)] as const);
+          const ratePts = run.map((w) => [x(w.t), y(w.rates.rate as number)] as const);
+          const xFirst = (ratePts[0] as readonly [number, number])[0].toFixed(1);
+          const xLast = (ratePts[ratePts.length - 1] as readonly [number, number])[0].toFixed(1);
+          const cp = svgEl('clipPath', { id: `clip-excess-${k}` }, defs);
+          svgEl('path', { d: `${pathOf(ratePts)}L${xLast},${C.y0 - 6}L${xFirst},${C.y0 - 6}Z` }, cp);
+          svgEl('path', { d: `${pathOf([...carryPts, ...[...ratePts].reverse()])}Z`, class: 'excess-fill', 'clip-path': `url(#clip-excess-${k})` }, gC);
+        });
+      }
+      for (const s of carryShown) {
+        const d = runsOf(withEdges, (w) => w.rates[s.key] !== null)
+          .map((run) => pathOf(run.map((w) => [x(w.t), y(w.rates[s.key] as number)] as const)))
+          .join('');
+        svgEl('path', { d, class: `line stroke-${s.key}` }, gC);
+      }
+    }
+
     // Fins de courbes : point et valeur (étiquettes directes, sauf sur écran étroit).
     const lastPrice = [...pricePts].reverse().find(([d]) => d <= t1);
     if (lastPrice) {
@@ -443,25 +562,27 @@ declare const DATA: ChartData;
     const lastWeek = inRange[inRange.length - 1];
     if (yPos && lastWeek) {
       const y = yPos;
-      const xe = x(lastWeek.t);
-      const items = shown
-        .map((s) => ({ s, v: valueOf(lastWeek, s.key, state.unit), y: y(valueOf(lastWeek, s.key, state.unit)), yl: 0 }))
-        .sort((a, b) => a.y - b.y);
-      const minGap = 15;
-      items.forEach((it, i) => {
-        const prev = items[i - 1];
-        it.yl = prev ? Math.max(it.y, prev.yl + minGap) : it.y;
-      });
-      const overflow = (items[items.length - 1]?.yl ?? 0) - (B.y1 - 4);
-      if (overflow > 0) for (const it of items) it.yl -= overflow;
-      for (const it of items) {
-        svgEl('circle', { cx: xe, cy: it.y, r: 4, class: `dot fill-${it.s.key}` }, svg);
-        if (narrow) continue;
-        const xl = xe + 10;
-        if (Math.abs(it.yl - it.y) > 1) svgEl('line', { x1: xe + 5, y1: it.y, x2: xl, y2: it.yl, class: 'leader' }, svg);
-        svgEl('line', { x1: xl, x2: xl + 8, y1: it.yl, y2: it.yl, class: `line stroke-${it.s.key}` }, svg);
-        svgText(svg, xl + 12, it.yl + 4, valueText(it.v, state.unit), { class: 'end-label' });
-      }
+      endLabels(
+        shown.map((s) => {
+          const v = valueOf(lastWeek, s.key, state.unit);
+          return { y: y(v), cls: s.key, text: valueText(v, state.unit) };
+        }),
+        B,
+        x(lastWeek.t),
+        narrow,
+      );
+    }
+    if (yCarry && lastWeek) {
+      const y = yCarry;
+      endLabels(
+        carryShown.flatMap((s) => {
+          const v = lastWeek.rates[s.key];
+          return v === null ? [] : [{ y: y(v), cls: s.key, text: rateText(v) }];
+        }),
+        C,
+        x(lastWeek.t),
+        narrow,
+      );
     }
     if (shown.length === 0) {
       svgText(svg, (B.x0 + B.x1) / 2, (B.y0 + B.y1) / 2, 'Aucune catégorie affichée : cliquez sur une catégorie au-dessus.', {
@@ -469,16 +590,23 @@ declare const DATA: ChartData;
         'text-anchor': 'middle',
       });
     }
+    if (carryShown.length === 0) {
+      svgText(svg, (C.x0 + C.x1) / 2, (C.y0 + C.y1) / 2, 'Prime et taux masqués : cliquez sur l’un des deux au-dessus.', {
+        class: 'empty',
+        'text-anchor': 'middle',
+      });
+    }
 
     // Zone de survol et réticule.
-    svgEl('rect', { x: A.x0, y: A.y0, width: A.x1 - A.x0, height: B.y1 - A.y0, class: 'hit' }, svg);
+    svgEl('rect', { x: A.x0, y: A.y0, width: A.x1 - A.x0, height: C.y1 - A.y0, class: 'hit' }, svg);
     svgEl('g', { class: 'crosshair', id: 'crosshair' }, svg);
 
-    frame = { W, A, B, x, yPrice, yPos, inRange, shown };
+    frame = { W, A, B, C, x, yPrice, yPos, yCarry, inRange, shown, carryShown };
     if (hoverDate && !inRange.some((w) => w.d === hoverDate)) hoverDate = null;
     desc.textContent =
       `Prix du bitcoin (échelle logarithmique) et position nette ${state.unit === 'pct' ? 'en % de l’intérêt ouvert' : 'en contrats'} ` +
-      `${shown.length ? `des ${shown.map((s) => s.name.toLowerCase()).join(', ')}` : 'd’aucune catégorie'}, du ${frDate(range.from)} au ${frDate(range.to)}.`;
+      `${shown.length ? `des ${shown.map((s) => s.name.toLowerCase()).join(', ')}` : 'd’aucune catégorie'}, du ${frDate(range.from)} au ${frDate(range.to)}. ` +
+      `${carryShown.length ? `En bas : ${carryShown.map((s) => s.name.toLowerCase()).join(' et ')}, en % par an.` : ''}`;
     drawCrosshair();
     updateControls();
     if (state.tableOpen) renderTable();
@@ -497,9 +625,15 @@ declare const DATA: ChartData;
     }
     const f = frame;
     const xx = f.x(w.t);
-    svgEl('line', { x1: crisp(xx), x2: crisp(xx), y1: f.A.y0, y2: f.B.y1, class: 'xhair' }, layer);
+    svgEl('line', { x1: crisp(xx), x2: crisp(xx), y1: f.A.y0, y2: f.C.y1, class: 'xhair' }, layer);
     if (w.close !== undefined) svgEl('circle', { cx: xx, cy: f.yPrice(w.close), r: 4, class: 'dot fill-price' }, layer);
     if (f.yPos) for (const s of f.shown) svgEl('circle', { cx: xx, cy: f.yPos(valueOf(w, s.key, state.unit)), r: 4, class: `dot fill-${s.key}` }, layer);
+    if (f.yCarry) {
+      for (const s of f.carryShown) {
+        const v = w.rates[s.key];
+        if (v !== null) svgEl('circle', { cx: xx, cy: f.yCarry(v), r: 4, class: `dot fill-${s.key}` }, layer);
+      }
+    }
     renderTip(w, xx, announce);
   }
 
@@ -523,6 +657,19 @@ declare const DATA: ChartData;
         htmlEl('span', 'name', s.name),
         htmlEl('small', '', `${other} · longs ${plain(w.long[s.key])}, courts ${plain(w.short[s.key])}`),
       );
+      tip.append(row);
+    }
+    if (f.carryShown.length) tip.append(htmlEl('div', 'tip-sep'));
+    for (const s of f.carryShown) {
+      const v = w.rates[s.key];
+      const row = htmlEl('div', 'tip-row');
+      row.append(
+        keySvg('line', `stroke-${s.key}`, 14),
+        htmlEl('strong', '', v === null ? '—' : rateText(v, 2)),
+        htmlEl('span', 'name', s.key === 'carry' ? 'prime des futures CME, par an' : 'taux US à 3 mois'),
+      );
+      const ex = excessOf(w);
+      if (s.key === 'carry' && ex !== null) row.append(htmlEl('small', '', `écart avec le taux à 3 mois : ${signed(ex, 2)}${NBSP}pt`));
       tip.append(row);
     }
     if (w.cross && state.layers.cross) {
@@ -648,6 +795,21 @@ declare const DATA: ChartData;
       });
       legend.append(b);
     }
+    legend.append(htmlEl('span', 'legend-sep'));
+    for (const s of CARRY_SERIES) {
+      const b = htmlEl('button', 'chip');
+      b.type = 'button';
+      b.dataset['carry'] = s.key;
+      const label = htmlEl('span');
+      label.append(document.createTextNode(s.name), htmlEl('span', 'sub', s.sub));
+      b.append(keySvg('line', `stroke-${s.key}`), label);
+      b.addEventListener('click', () => {
+        state.carry[s.key] = !state.carry[s.key];
+        saveState();
+        render();
+      });
+      legend.append(b);
+    }
     legend.append(htmlEl('span', 'legend-sep'), htmlEl('span', 'legend-label', 'Repères'));
     for (const l of LAYERS) {
       const b = htmlEl('button', 'chip small');
@@ -693,7 +855,7 @@ declare const DATA: ChartData;
       `Dernier rapport : positions arrêtées le ${frDate(DATA.lastAsOf)}` +
       `${DATA.lastPublication ? `, publiées le ${frDate(DATA.lastPublication)}` : ''}` +
       ` · bitcoin ${lastPrice !== undefined ? usd(lastPrice) : '—'} à la clôture du ${frDate(isoOfDay(priceEnd))}.`;
-    byId('source').textContent = `Données COT : ${DATA.cotSource}. Prix : ${DATA.priceSource}.`;
+    byId('source').textContent = `Données COT : ${DATA.cotSource}. Prix : ${DATA.priceSource}. Prime des futures : ${DATA.carrySource}.`;
   }
 
   function setRange(key: RangeKey): void {
@@ -708,6 +870,9 @@ declare const DATA: ChartData;
     for (const b of unitsBox.querySelectorAll<HTMLButtonElement>('button')) b.setAttribute('aria-pressed', String(b.dataset['unit'] === state.unit));
     for (const b of legend.querySelectorAll<HTMLButtonElement>('button[data-series]')) {
       b.setAttribute('aria-pressed', String(state.visible[b.dataset['series'] as SeriesKey]));
+    }
+    for (const b of legend.querySelectorAll<HTMLButtonElement>('button[data-carry]')) {
+      b.setAttribute('aria-pressed', String(state.carry[b.dataset['carry'] as CarryKey]));
     }
     for (const b of legend.querySelectorAll<HTMLButtonElement>('button[data-layer]')) {
       const key = b.dataset['layer'] as LayerKey;
@@ -729,11 +894,21 @@ declare const DATA: ChartData;
     if (!f) return;
     const range = rangeOf(state.range);
     const unitLabel = state.unit === 'pct' ? '% OI' : 'contrats';
+    const showExcess = state.carry.carry && state.carry.rate;
     byId('table-caption').textContent =
       `Semaines du ${frDate(range.from)} au ${frDate(range.to)}, de la plus récente à la plus ancienne. ` +
-      `Positions nettes calculées (${state.unit === 'pct' ? 'en % de l’intérêt ouvert' : 'en contrats'}).`;
+      `Positions nettes calculées (${state.unit === 'pct' ? 'en % de l’intérêt ouvert' : 'en contrats'})` +
+      `${f.carryShown.length ? ' ; prime des futures calculée, taux publié, en % par an' : ''}.`;
     const head = htmlEl('tr');
-    for (const h of ['Arrêté', 'Bitcoin', ...f.shown.map((s) => `${s.short} (${unitLabel})`), 'Intérêt ouvert', 'Repère']) {
+    for (const h of [
+      'Arrêté',
+      'Bitcoin',
+      ...f.shown.map((s) => `${s.short} (${unitLabel})`),
+      ...f.carryShown.map((s) => `${s.short} (% par an)`),
+      ...(showExcess ? ['Écart (points)'] : []),
+      'Intérêt ouvert',
+      'Repère',
+    ]) {
       const th = htmlEl('th', '', h);
       th.scope = 'col';
       head.append(th);
@@ -745,10 +920,16 @@ declare const DATA: ChartData;
     for (const w of [...f.inRange].reverse()) {
       const tr = htmlEl('tr');
       const marks = [w.cross ? 'passage net short' : '', w.edition ? `McClellan ${frDayMonth(w.edition.edition)}` : ''].filter(Boolean).join(' · ');
+      const ex = excessOf(w);
       for (const cell of [
         frDate(w.d),
         w.close !== undefined ? usd(w.close) : '—',
         ...f.shown.map((s) => valueText(valueOf(w, s.key, state.unit), state.unit, 2)),
+        ...f.carryShown.map((s) => {
+          const v = w.rates[s.key];
+          return v === null ? '—' : rateText(v, 2);
+        }),
+        ...(showExcess ? [ex === null ? '—' : signed(ex, 2)] : []),
         plain(w.oi),
         marks,
       ]) {

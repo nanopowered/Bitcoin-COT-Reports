@@ -2,13 +2,21 @@
 // Tous les chiffres des textes sont recalculés depuis les données : ils restent justes après `npm run fetch`.
 
 import { runVariant } from '../../analysis/backtest.ts';
+import { carryStats } from '../../analysis/carry-stats.ts';
+import type { WeeklyCarry } from '../../analysis/carry.ts';
 import { crossingEvents, firstNetLongIndex } from '../../analysis/events.ts';
 import type { TrackerRow } from '../../analysis/tracker.ts';
 import type { Dataset } from '../../config.ts';
 import { EDITIONS } from '../../mcclellan/editions.ts';
 import { addDays, daysBetween, frDate } from '../../util/dates.ts';
 import { num, pctS, pValue, signed } from '../format.ts';
-import type { ChartData, ChartEdition, GuideItem, RangePreset, WeekTuple } from './data.ts';
+import type { CarryTuple, ChartData, ChartEdition, GuideItem, RangePreset, WeekTuple } from './data.ts';
+
+/** Prime hebdomadaire alignée sur le suivi, et sa provenance. */
+export interface CarryInput {
+  weeks: readonly WeeklyCarry[];
+  source: string;
+}
 
 const pctOi = (x: number) => `${signed(x, 1)} %`;
 
@@ -19,7 +27,7 @@ function maxBy<T>(xs: readonly T[], f: (x: T) => number): T {
   return xs.reduce((best, x) => (f(x) > f(best) ? x : best));
 }
 
-export function buildChartData(ds: Dataset, t: readonly TrackerRow[], permutationDraws = 20_000): ChartData {
+export function buildChartData(ds: Dataset, t: readonly TrackerRow[], carry: CarryInput, permutationDraws = 20_000): ChartData {
   const first = t[0] as TrackerRow;
   const last = t[t.length - 1] as TrackerRow;
   const closes = [...ds.px.closes.values()];
@@ -122,6 +130,43 @@ export function buildChartData(ds: Dataset, t: readonly TrackerRow[], permutatio
       `l’inverse : ${pctOi(start.cNetPctOi)}, ${pctOi(trough.cNetPctOi)}, puis ${pctOi(end.cNetPctOi)}.`,
   });
 
+  // --- Prime des futures ---
+  const cs = carryStats(t, carry.weeks, ds.px, { draws: permutationDraws });
+  const year = (y: string) => cs.annual.find((a) => a.year === y);
+  const lastYear = cs.annual[cs.annual.length - 1];
+  const pt = (x: number | null | undefined) => `${signed(x, 1)} pt`;
+  const excessLevels = cs.correlations[0]?.rows.find((r) => r.measure === 'excess3m');
+  const yearly = [year('2020'), year('2023'), lastYear]
+    .filter((a, i, xs): a is NonNullable<typeof a> => a !== undefined && xs.indexOf(a) === i)
+    .map((a) => `${pt(a.excess3m)} en ${a.year}`);
+  guide.push({
+    range: null,
+    period: 'prime des futures',
+    text:
+      `Troisième panneau : la prime des futures CME (calculée : 2e contrat contre 1er, annualisée) et le taux du ` +
+      `Trésor américain à 3 mois. L’écart ombré entre les deux est ce que rapporte un arbitrage cash-and-carry : ` +
+      `acheter le bitcoin au comptant, vendre le future. En médiane, il vaut ${yearly.join(', ')} (calc.).` +
+      (excessLevels && excessLevels.levels > 0
+        ? ` Plus il est large, plus les shorts non commerciaux pèsent dans l’OI (corrélation de rang ` +
+          `${signed(excessLevels.levels, 2)} depuis ${t[0]?.asOf.slice(0, 4) ?? ''}) : un net short peut alors n’être ` +
+          `que la jambe couverte d’un arbitrage.`
+        : ''),
+  });
+  if (cs.split) {
+    const s = cs.split;
+    guide.push({
+      range: 'oscillation',
+      period: 'passages net short et prime',
+      text:
+        `Les ${s.thin.length + s.wide.length} passages net short exploitables depuis 2022, classés selon l’écart du moment. ` +
+        `Écart faible (${pt(s.threshold)} ou moins) : le bitcoin fait en médiane ${pctS(s.thinMedian)} à 13 semaines. ` +
+        `Écart large : ${pctS(s.wideMedian)}. ` +
+        (s.pThinLower < 0.05
+          ? `Différence significative (p = ${pValue(s.pThinLower)}), sur deux petits groupes.`
+          : `Différence non significative (p = ${pValue(s.pThinLower)}) : deux groupes de ${s.thin.length} ne font pas une règle.`),
+    });
+  }
+
   guide.push({
     range: null,
     period: 'chaque semaine',
@@ -144,6 +189,13 @@ export function buildChartData(ds: Dataset, t: readonly TrackerRow[], permutatio
     r.publication,
   ]);
 
+  const round2 = (x: number | null) => (x === null ? null : Math.round(x * 100) / 100);
+  const carryTuples: CarryTuple[] = t.map((r, i) => {
+    const c = carry.weeks[i];
+    if (!c || c.asOf !== r.asOf) throw new Error(`Prime absente ou décalée pour l’arrêté du ${r.asOf}`);
+    return [round2(c.carry), round2(c.us03m)];
+  });
+
   return {
     code: ds.code,
     cotSource: ds.cotSource,
@@ -151,6 +203,8 @@ export function buildChartData(ds: Dataset, t: readonly TrackerRow[], permutatio
     lastAsOf: last.asOf,
     lastPublication: last.publication,
     weeks,
+    carry: carryTuples,
+    carrySource: carry.source,
     priceStart: ds.px.first,
     closes,
     crossings,

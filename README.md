@@ -5,6 +5,7 @@ Suivi reproductible du **Commitment of Traders bitcoin** (CFTC, rapport *Legacy 
 - **Suivi** : position nette des non-commerciaux, en contrats et en % de l'intérêt ouvert, variation hebdomadaire et son rang percentile dans l'historique. Deux événements sont signalés : le passage net short et la variation extrême.
 - **Backtest** : rendement du bitcoin 4, 13 et 26 semaines après un passage net short (simple ou « marqué »), et après une variation extrême.
 - **Confrontation** : ses six commentaires d'août-septembre 2026, face aux chiffres du rapport qu'il commentait.
+- **Graphique interactif** : prix du bitcoin et position nette de chaque catégorie de traders ; chaque catégorie s'affiche ou se masque d'un clic.
 
 Conclusions et limites : [`docs/rapport.md`](docs/rapport.md).
 
@@ -12,9 +13,10 @@ Conclusions et limites : [`docs/rapport.md`](docs/rapport.md).
 
 ```bash
 npm install          # uniquement TypeScript et @types/node (typage) — aucune dépendance d'exécution
-npm run all          # suivi + backtest + confrontation → output/
-npm test             # 38 tests
-npm run typecheck
+npm run all          # suivi + backtest + confrontation + graphique → output/
+npm run chart        # graphique seul → output/graphique.html, à ouvrir dans un navigateur
+npm test             # 41 tests
+npm run typecheck    # code Node et script du navigateur
 ```
 
 Node ≥ 22.18 exécute directement les fichiers `.ts` (type stripping). Sur un Node plus ancien : `npx tsx src/cli/track.ts`.
@@ -48,6 +50,7 @@ npm run fetch -- --code 133742                  # Micro Bitcoin
 | `signaux.md` | État de la dernière semaine et toutes les semaines signalées |
 | `backtest.md`, `backtest_evenements.csv`, `backtest.json` | Résultats agrégés, détail par événement, données complètes |
 | `comparaison.md` | Chaque édition McClellan face à son arrêté COT ; vérification de sa règle sur les commerciaux |
+| `graphique.html` | Graphique interactif autonome (données et script embarqués, aucune dépendance) : période, unité (% de l'OI ou contrats), une catégorie par clic, passages net short, éditions McClellan, info-bulle, tableau |
 
 ## Conventions qui comptent
 
@@ -70,7 +73,8 @@ src/
   calendar/     publication (vendredi, shutdowns), échéances CME
   analysis/     suivi, événements, backtest
   mcclellan/    ses six éditions (citations littérales séparées des résumés), confrontation, règle des commerciaux
-  report/       mise en forme française
+  report/       mise en forme française ; chart/ : graphique interactif (script navigateur en TypeScript,
+                typé par tsconfig.client.json, types effacés à la génération)
   cli/          fetch, track, backtest, compare
 scripts/        reconstruction du snapshot TradingView
 test/           tests node:test et fixtures des trois formats CFTC

@@ -13,9 +13,10 @@
     "track": "node src/cli/track.ts",
     "backtest": "node src/cli/backtest.ts",
     "compare": "node src/cli/compare.ts",
-    "all": "npm run track && npm run backtest && npm run compare",
-    "typecheck": "tsc --noEmit",
-    "test": "node --test test/*.test.ts"
+    "chart": "node --disable-warning=ExperimentalWarning src/cli/chart.ts",
+    "all": "npm run track && npm run backtest && npm run compare && npm run chart",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.18.0",

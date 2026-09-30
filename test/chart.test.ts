@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { weeklyCarry } from '../src/analysis/carry.ts';
 import { buildTracker, DEFAULT_TRACKER_OPTIONS } from '../src/analysis/tracker.ts';
-import { loadDataset, loadMarket } from '../src/config.ts';
+import { loadDataset, loadMarket, loadTff } from '../src/config.ts';
 import { buildChartData, jsonForScript } from '../src/report/chart/build.ts';
 import { asFragment, asStandalone, renderChartPage } from '../src/report/chart/page.ts';
 
@@ -17,7 +17,7 @@ const carry = {
   ),
   source: 'test',
 };
-const data = buildChartData(ds, tracker, carry, 500);
+const data = buildChartData(ds, tracker, carry, loadTff(ds), 500);
 
 test('données du graphique : semaines, passages net short, éditions, périodes', () => {
   assert.equal(data.weeks.length, 442);
@@ -39,6 +39,9 @@ test('données du graphique : semaines, passages net short, éditions, périodes
     assert.ok(r !== null && Number.isFinite(r), String(r));
   }
   assert.deepEqual(data.carry.at(-1), [5.45, 4.11]);
+  // Shorts des hedge funds (TFF) : un par semaine, valeur publiée du 22/09/2026.
+  assert.equal(data.lfShort.length, data.weeks.length);
+  assert.equal(data.lfShort.at(-1), 12698);
   assert.ok(data.guide.some((g) => g.period === 'prime des futures'));
   // Les trois nets que le navigateur calcule à partir des tuples se somment à zéro.
   for (const [, , ncL, ncS, , cL, cS, nrL, nrS] of data.weeks) assert.equal(ncL - ncS + (cL - cS) + (nrL - nrS), 0);

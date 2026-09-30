@@ -20,6 +20,7 @@
     --s2: #eb6834;
     --s3: #1baf7a;
     --s4: #eda100;
+    --s5: #e87ba4;
     --price: #44423d;
     --focus: #2a78d6;
     --font-ui: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -41,6 +42,7 @@
       --s2: #d95926;
       --s3: #199e70;
       --s4: #c98500;
+      --s5: #d55181;
       --price: #d3d1c7;
       --focus: #3987e5;
       color-scheme: dark;
@@ -61,6 +63,7 @@
     --s2: #d95926;
     --s3: #199e70;
     --s4: #c98500;
+    --s5: #d55181;
     --price: #d3d1c7;
     --focus: #3987e5;
     color-scheme: dark;
@@ -186,12 +189,14 @@
   .fill-nc { fill: var(--s1); }
   .fill-c { fill: var(--s2); }
   .fill-nr { fill: var(--s3); }
-  .stroke-carry { stroke: var(--s4); }
-  .fill-carry { fill: var(--s4); }
+  .stroke-lf { stroke: var(--s4); }
+  .fill-lf { fill: var(--s4); }
+  .stroke-carry { stroke: var(--s5); }
+  .fill-carry { fill: var(--s5); }
   .stroke-rate { stroke: var(--ink-2); stroke-dasharray: 5 4; stroke-linecap: butt; }
   .fill-rate { fill: var(--ink-2); }
   .chip .key-line.stroke-rate { stroke-width: 2.5; stroke-dasharray: 4 3; stroke-linecap: butt; }
-  .excess-fill { fill: var(--s4); opacity: 0.2; stroke: none; }
+  .excess-fill { fill: var(--s5); opacity: 0.2; stroke: none; }
   .dot { stroke: var(--surface); stroke-width: 2; }
   .hgrid, .vgrid { stroke: var(--grid); stroke-width: 1; }
   .zero { stroke: var(--axis); stroke-width: 1; }
@@ -334,6 +339,7 @@
   <footer class="notes">
     <p>Position nette = positions longues − positions courtes d’une catégorie ; en % de l’intérêt ouvert (OI) pour comparer 2018 et 2026, l’OI ayant été multiplié par plus de dix. Valeurs calculées à partir des positions publiées par la CFTC ; les positions « spread » des non-commerciaux, à la fois longues et courtes, n’entrent pas dans le net.</p>
     <p>Non-commerciaux : grands spéculateurs déclarés (fonds, gérants, négociants). Commerciaux : intervenants déclarés au titre de la couverture. Non-déclarants : positions sous le seuil de déclaration, déduites par la CFTC de l’OI total.</p>
+    <p>Hedge funds (série à cocher) : positions courtes des « Leveraged Funds » du rapport TFF de la CFTC, même contrat, mêmes dates. C’est une position brute, pas un net : elle ne s’additionne pas aux trois autres courbes. Les catégories du TFF ne recoupent pas celles du rapport Legacy.</p>
     <p>Positions arrêtées le mardi et publiées le vendredi ; le graphique les place au mardi. Prix : clôtures quotidiennes UTC, échelle logarithmique.</p>
     <p>Prime des futures (calculée) : (2e contrat ÷ 1er − 1) × 365 ÷ jours entre leurs échéances, médiane des cinq séances CME jusqu’au mardi d’arrêté. C’est ce qu’encaisse, d’une échéance à la suivante, un vendeur de futures couvert au comptant. Le taux de référence est celui du bon du Trésor américain à 3 mois, l’horizon de cet arbitrage ; le gain réel est plus faible (frais, marge immobilisée, coût de financement), et le COT ne dit pas si un vendeur arbitre ou parie.</p>
   </footer>

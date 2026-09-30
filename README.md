@@ -6,7 +6,8 @@ Suivi reproductible du **Commitment of Traders bitcoin** (CFTC, rapport *Legacy 
 - **Backtest** : rendement du bitcoin 4, 13 et 26 semaines après un passage net short (simple ou « marqué »), et après une variation extrême.
 - **Confrontation** : ses six commentaires d'août-septembre 2026, face aux chiffres du rapport qu'il commentait.
 - **Prime des futures** : écart entre les deux premiers contrats CME, annualisé, face au taux du Trésor à 3 mois. L'écart est ce que rapporte un arbitrage cash-and-carry : il aide à repérer les shorts qui peuvent n'être que des couvertures.
-- **Graphique interactif** : prix du bitcoin, position nette de chaque catégorie de traders, prime des futures et taux à 3 mois ; chaque série s'affiche ou se masque d'un clic.
+- **Graphique interactif** : prix du bitcoin, position nette de chaque catégorie de traders, positions courtes des hedge funds (rapport TFF, en option), prime des futures et taux à 3 mois ; chaque série s'affiche ou se masque d'un clic.
+- **Indicateurs TradingView** (`tradingview/`) : les mêmes panneaux en Pine Script, à ajouter sous un graphique du bitcoin. Voir [`tradingview/README.md`](tradingview/README.md).
 
 Conclusions et limites : [`docs/rapport.md`](docs/rapport.md).
 
@@ -16,7 +17,7 @@ Conclusions et limites : [`docs/rapport.md`](docs/rapport.md).
 npm install          # uniquement TypeScript et @types/node (typage) — aucune dépendance d'exécution
 npm run all          # suivi + backtest + confrontation + prime + graphique → output/
 npm run chart        # graphique seul → output/graphique.html, à ouvrir dans un navigateur
-npm test             # 48 tests
+npm test             # 49 tests
 npm run typecheck    # code Node et script du navigateur
 ```
 
@@ -28,6 +29,7 @@ Node ≥ 22.18 exécute directement les fichiers `.ts` (type stripping). Sur un 
 |---|---|---|
 | `data/cot_legacy_133741.csv` | OI et positions longues, courtes et spread des non-commerciaux, commerciaux et non-déclarants — **valeurs publiées uniquement** | voir `.meta.json` |
 | `data/btc_usdt_daily.csv` | OHLC quotidien BTCUSDT (UTC) | voir `.meta.json` |
+| `data/cot_tff_133741.csv` | Positions courtes des Leveraged Funds (hedge funds), rapport TFF, mêmes dates d'arrêté — **valeurs publiées** | voir `.meta.json` |
 | `data/cme_btc_futures_daily.csv` | Clôtures quotidiennes des deux premiers contrats CME (`f1_close`, `f2_close`), par séance | voir `.meta.json` |
 | `data/us_rates_daily.csv` | Rendements du Trésor américain à 3 mois et à 10 ans, % par an | voir `.meta.json` |
 | `data/raw/tradingview/` | Réponses brutes ayant servi aux snapshots | TradingView via le serveur MCP tvremix |
@@ -72,7 +74,7 @@ npm run track -- --tail 0.10 --min-history 104
 
 ```
 src/
-  cot/          lecture CFTC (Socrata, export CSV, annual.txt), TradingView, contrôles d'intégrité
+  cot/          lecture CFTC (Socrata, export CSV, annual.txt), TradingView, contrôles d'intégrité ; TFF (hedge funds)
   price/        Binance, CSV, rendements et pires baisses
   market/       futures CME (deux premiers contrats) et taux US : lecture, date de séance TradingView
   calendar/     publication (vendredi, shutdowns), échéances CME
@@ -82,6 +84,7 @@ src/
                 typé par tsconfig.client.json, types effacés à la génération)
   cli/          fetch, track, backtest, compare, carry, chart
 scripts/        reconstruction des snapshots TradingView
+tradingview/    indicateurs Pine Script : positions COT, prime des futures CME
 test/           tests node:test et fixtures des trois formats CFTC
 docs/rapport.md analyse rédigée
 ```

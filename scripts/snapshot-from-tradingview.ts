@@ -11,8 +11,21 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { checkIntegrity, writeCotCsv } from '../src/cot/legacy.ts';
+import { tffFromTradingView, tffSymbol, writeTffCsv } from '../src/cot/tff.ts';
 import { rowsFromTradingView, TV_LEGACY_METRICS, tvSymbol, type TvMetric, type TvSeries } from '../src/cot/tradingview.ts';
-import { cotCsvPath, cotMetaPath, DATA_DIR, FUTURES_CSV, FUTURES_META, PRICE_CSV, PRICE_META, RATES_CSV, RATES_META } from '../src/config.ts';
+import {
+  cotCsvPath,
+  cotMetaPath,
+  DATA_DIR,
+  FUTURES_CSV,
+  FUTURES_META,
+  PRICE_CSV,
+  PRICE_META,
+  RATES_CSV,
+  RATES_META,
+  tffCsvPath,
+  tffMetaPath,
+} from '../src/config.ts';
 import { writeFuturesCsv, type FuturesDay } from '../src/market/futures.ts';
 import { writeRatesCsv, type RateDay } from '../src/market/rates.ts';
 import { closesBySession } from '../src/market/tradingview.ts';
@@ -132,3 +145,27 @@ const ratesMeta: SourceMeta = {
 };
 writeFileSync(RATES_META, JSON.stringify(ratesMeta, null, 2) + '\n');
 console.log(`Taux US : ${rates.length} séances, ${ratesMeta.first} → ${ratesMeta.last}`);
+
+// --- TFF : positions courtes des Leveraged Funds (hedge funds) ---
+// Récupérées le 30/09/2026 ; mêmes dates d'arrêté que le rapport Legacy.
+const tffRaw = readRaw(`${tffSymbol(CODE, 'LMP_S').replace(':', '_')}_1D.json`);
+const tff = tffFromTradingView(tffRaw);
+const legacyDates = new Set(cot.map((r) => r.asOf));
+const tffOnly = tff.filter((r) => !legacyDates.has(r.asOf)).map((r) => r.asOf);
+const legacyOnly = cot.filter((r) => !tff.some((x) => x.asOf === r.asOf)).map((r) => r.asOf);
+if (tffOnly.length || legacyOnly.length) throw new Error(`Dates TFF et Legacy différentes : ${[...tffOnly, ...legacyOnly].join(', ')}`);
+writeTffCsv(tffCsvPath(CODE), tff);
+const tffMeta: SourceMeta = {
+  source: `TradingView ${tffRaw.symbol} (CFTC Traders in Financial Futures, futures seuls) via tvremix get_ohlcv, intervalle 1D`,
+  retrievedAt: '2026-09-30T11:15:15Z',
+  rows: tff.length,
+  first: tff[0]?.asOf ?? '',
+  last: tff[tff.length - 1]?.asOf ?? '',
+  notes: [
+    'lev_money_short = positions courtes des « Leveraged Funds » (hedge funds, CTA), en contrats, valeur publiée.',
+    `Mêmes ${tff.length} dates d’arrêté que le rapport Legacy (vérifié).`,
+    'Les catégories TFF ne recoupent pas celles du Legacy : une partie des dealers, classés à part dans le TFF, est non commerciale dans le Legacy.',
+  ],
+};
+writeFileSync(tffMetaPath(CODE), JSON.stringify(tffMeta, null, 2) + '\n');
+console.log(`TFF ${CODE} (shorts Leveraged Funds) : ${tff.length} semaines, ${tffMeta.first} → ${tffMeta.last}`);

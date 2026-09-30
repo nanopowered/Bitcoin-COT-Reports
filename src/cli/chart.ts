@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { weeklyCarry } from '../analysis/carry.ts';
 import { buildTracker, DEFAULT_TRACKER_OPTIONS } from '../analysis/tracker.ts';
-import { loadDataset, loadMarket, OUTPUT_DIR } from '../config.ts';
+import { loadDataset, loadMarket, loadTff, OUTPUT_DIR } from '../config.ts';
 import { buildChartData } from '../report/chart/build.ts';
 import { asFragment, asStandalone, renderChartPage } from '../report/chart/page.ts';
 
@@ -29,7 +29,7 @@ const carry = {
   ),
   source: `${market.futuresSource} ; taux : ${market.ratesSource}`,
 };
-const page = renderChartPage(buildChartData(ds, t, carry));
+const page = renderChartPage(buildChartData(ds, t, carry, loadTff(ds)));
 mkdirSync(OUTPUT_DIR, { recursive: true });
 const out = join(OUTPUT_DIR, 'graphique.html');
 const html = asStandalone(page);

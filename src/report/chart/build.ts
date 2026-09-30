@@ -6,9 +6,10 @@ import { carryStats } from '../../analysis/carry-stats.ts';
 import type { WeeklyCarry } from '../../analysis/carry.ts';
 import { crossingEvents, firstNetLongIndex } from '../../analysis/events.ts';
 import type { TrackerRow } from '../../analysis/tracker.ts';
-import type { Dataset } from '../../config.ts';
+import type { Dataset, TffData } from '../../config.ts';
 import { EDITIONS } from '../../mcclellan/editions.ts';
 import { addDays, daysBetween, frDate } from '../../util/dates.ts';
+import { spearman } from '../../util/stats.ts';
 import { num, pctS, pValue, signed } from '../format.ts';
 import type { CarryTuple, ChartData, ChartEdition, GuideItem, RangePreset, WeekTuple } from './data.ts';
 
@@ -27,7 +28,13 @@ function maxBy<T>(xs: readonly T[], f: (x: T) => number): T {
   return xs.reduce((best, x) => (f(x) > f(best) ? x : best));
 }
 
-export function buildChartData(ds: Dataset, t: readonly TrackerRow[], carry: CarryInput, permutationDraws = 20_000): ChartData {
+export function buildChartData(
+  ds: Dataset,
+  t: readonly TrackerRow[],
+  carry: CarryInput,
+  tff: TffData,
+  permutationDraws = 20_000,
+): ChartData {
   const first = t[0] as TrackerRow;
   const last = t[t.length - 1] as TrackerRow;
   const closes = [...ds.px.closes.values()];
@@ -131,6 +138,19 @@ export function buildChartData(ds: Dataset, t: readonly TrackerRow[], carry: Car
   });
 
   // --- Prime des futures ---
+  const lfShort = t.map((r, i) => {
+    const x = tff.rows[i];
+    if (!x || x.asOf !== r.asOf) throw new Error(`TFF absent ou décalé pour l’arrêté du ${r.asOf}`);
+    return x.levMoneyShort;
+  });
+  const lfPairs = t.flatMap((r, i) => {
+    const e = carry.weeks[i]?.excess3m;
+    return e === null || e === undefined ? [] : [[e, ((lfShort[i] as number) / r.openInterest) * 100] as const];
+  });
+  const rhoLf = spearman(
+    lfPairs.map(([e]) => e),
+    lfPairs.map(([, s]) => s),
+  );
   const cs = carryStats(t, carry.weeks, ds.px, { draws: permutationDraws });
   const year = (y: string) => cs.annual.find((a) => a.year === y);
   const lastYear = cs.annual[cs.annual.length - 1];
@@ -150,6 +170,10 @@ export function buildChartData(ds: Dataset, t: readonly TrackerRow[], carry: Car
         ? ` Plus il est large, plus les shorts non commerciaux pèsent dans l’OI (corrélation de rang ` +
           `${signed(excessLevels.levels, 2)} depuis ${t[0]?.asOf.slice(0, 4) ?? ''}) : un net short peut alors n’être ` +
           `que la jambe couverte d’un arbitrage.`
+        : '') +
+      (rhoLf > 0
+        ? ` Les positions courtes des hedge funds (rapport TFF, série à cocher au-dessus du graphique) suivent le même ` +
+          `mouvement : corrélation de rang ${signed(rhoLf, 2)} entre leur part de l’OI et l’écart.`
         : ''),
   });
   if (cs.split) {
@@ -205,6 +229,8 @@ export function buildChartData(ds: Dataset, t: readonly TrackerRow[], carry: Car
     weeks,
     carry: carryTuples,
     carrySource: carry.source,
+    lfShort,
+    tffSource: tff.source,
     priceStart: ds.px.first,
     closes,
     crossings,

@@ -49,6 +49,9 @@ export interface ChartData {
   /** Une paire par semaine de `weeks`. */
   carry: CarryTuple[];
   carrySource: string;
+  /** Positions courtes des Leveraged Funds (rapport TFF), en contrats, une par semaine de `weeks` ; valeurs publiées. */
+  lfShort: (number | null)[];
+  tffSource: string;
   /** Date de la première clôture de `closes` ; les clôtures sont quotidiennes et consécutives. */
   priceStart: string;
   closes: number[];

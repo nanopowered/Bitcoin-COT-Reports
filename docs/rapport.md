@@ -218,7 +218,7 @@ Détail et tableaux : `output/prime.md` (`npm run carry`). Tous les chiffres de 
 - Écart faible : médiane −10,6 % à 13 semaines. Écart large : +3,1 %.
 - C'est dans le sens de l'intuition (un net short sans arbitrage rentable dit davantage), mais **non significatif** (p = 0,21). Le groupe à écart faible mêle deux cas opposés : le début du marché baissier de 2022 (−31 % à −58 %) et la capitulation de fin 2022, prime négative, suivie de +53 % à +65 %.
 
-**Lecture pour McClellan.** Ce qu'il écrit : « Tops tend to come once these traders have crossed over to the net short side in a big way ». Ce que la donnée ajoute : un net short « en grand » pendant que l'écart est large peut n'être que de l'arbitrage. C'est le cas de 2019-2021 (écart de +3 à +8 points en médiane annuelle, nets courts toute la période, bitcoin en forte hausse). En 2018, à l'inverse, l'écart est négatif (−2,1 points en médiane) : ces shorts ne pouvaient pas être un arbitrage rentable, et le bitcoin a baissé (6 844 $ le 10/04, 3 703 $ le 31/12). Un seul épisode de chaque côté : c'est une piste, pas une règle. Le graphique affiche la prime et le taux sous les positions pour le vérifier semaine par semaine.
+**Lecture pour McClellan.** Ce qu'il écrit : « Tops tend to come once these traders have crossed over to the net short side in a big way ». Ce que la donnée ajoute : un net short « en grand » pendant que l'écart est large peut n'être que de l'arbitrage. C'est le cas de 2019-2021 (écart de +3 à +8 points en médiane annuelle, nets courts toute la période, bitcoin en forte hausse). En 2018, à l'inverse, l'écart est négatif (−2,1 points en médiane) : ces shorts ne pouvaient pas être un arbitrage rentable, et le bitcoin a baissé (6 844 $ le 10/04, 3 703 $ le 31/12). Un seul épisode de chaque côté : c'est une piste, pas une règle. Le graphique affiche la prime et le taux sous les positions pour le vérifier semaine par semaine ; il peut aussi montrer les positions courtes brutes des hedge funds (rapport TFF). Les mêmes panneaux existent en indicateurs TradingView (`tradingview/`).
 
 ---
 
@@ -233,7 +233,7 @@ Détail et tableaux : `output/prime.md` (`npm run carry`). Tous les chiffres de 
   - Ils sont exposés en paramètres et en grilles pour qu'aucune conclusion ne dépende d'un choix caché.
 - **Données.**
   - Snapshot TradingView en attendant le contrôle croisé CFTC (`npm run fetch`).
-  - Contrat standard 133741 seulement : ni le Micro (133742), ni le rapport TFF.
+  - Contrat standard 133741 seulement, pas le Micro (133742). Du rapport TFF, seules les positions courtes des hedge funds (Leveraged Funds) sont reprises, pour le graphique.
   - Prix spot Binance, pas le future CME. Clôture à minuit UTC, contre environ 21-22 h UTC pour l'arrêté CME du mardi.
   - Prime : contrats continus TradingView (date de roulement non documentée, clôture peut-être pas au règlement). En 2018-2019, le pas de cotation de 5 $ vaut à lui seul 1 à 2 points de prime annualisée.
 - **Calendrier.** Les décalages de publication d'un à trois jours lors des semaines fériées ne sont pas modélisés. Seuls les deux shutdowns le sont.

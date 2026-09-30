@@ -7,7 +7,8 @@ import type { ChartData, ChartEdition, RangeKey } from './data.ts';
 declare const DATA: ChartData;
 
 (() => {
-  type SeriesKey = 'nc' | 'c' | 'nr';
+  /** 'lf' : positions courtes brutes des hedge funds (TFF), pas un net. */
+  type SeriesKey = 'nc' | 'c' | 'nr' | 'lf';
   type CarryKey = 'carry' | 'rate';
   type Unit = 'pct' | 'ctr';
   type LayerKey = 'cross' | 'mcc';
@@ -86,6 +87,7 @@ declare const DATA: ChartData;
     { key: 'nc', name: 'Non-commerciaux', short: 'Non-comm.', sub: 'grands spéculateurs' },
     { key: 'c', name: 'Commerciaux', short: 'Comm.', sub: 'couvreurs déclarés' },
     { key: 'nr', name: 'Non-déclarants', short: 'Non-décl.', sub: 'sous le seuil de déclaration' },
+    { key: 'lf', name: 'Hedge funds : courts', short: 'Hedge funds, courts', sub: 'rapport TFF, brut (pas un net)' },
   ];
   const CARRY_SERIES: readonly CarrySeries[] = [
     { key: 'carry', name: 'Prime des futures CME', short: 'Prime CME', sub: '2e contrat / 1er, annualisée' },
@@ -113,6 +115,9 @@ declare const DATA: ChartData;
   const pctText = (x: number, digits = 1) => `${signed(x, digits)}${NBSP}%`;
   const valueOf = (w: Week, k: SeriesKey, unit: Unit) => (unit === 'pct' ? w.pct[k] : w.net[k]);
   const valueText = (v: number, unit: Unit, digits = 1) => (unit === 'pct' ? pctText(v, digits) : signed(v));
+  /** Un net porte un signe ; une position brute (hedge funds) non. */
+  const seriesText = (k: SeriesKey, v: number, unit: Unit, digits = 1) =>
+    k !== 'lf' ? valueText(v, unit, digits) : unit === 'pct' ? `${plain(v, digits)}${NBSP}%` : plain(v);
   const rateText = (v: number, digits = 1) => `${plain(v, digits)}${NBSP}%`;
   const excessOf = (w: Week) => (w.rates.carry !== null && w.rates.rate !== null ? w.rates.carry - w.rates.rate : null);
 
@@ -131,17 +136,19 @@ declare const DATA: ChartData;
   const editions = new Map(DATA.editions.map((e) => [e.asOf, e]));
 
   const weeks: Week[] = DATA.weeks.map(([d, oi, ncL, ncS, , cL, cS, nrL, nrS, pub], i) => {
-    const net = { nc: ncL - ncS, c: cL - cS, nr: nrL - nrS };
+    // Les hedge funds n'ont qu'une position courte brute ; elle occupe la place du « net » (NaN si absente).
+    const lf = DATA.lfShort[i] ?? Number.NaN;
+    const net = { nc: ncL - ncS, c: cL - cS, nr: nrL - nrS, lf };
     const t = toDay(d);
     const [carry, rate] = DATA.carry[i] ?? [null, null];
     return {
       d,
       t,
       oi,
-      long: { nc: ncL, c: cL, nr: nrL },
-      short: { nc: ncS, c: cS, nr: nrS },
+      long: { nc: ncL, c: cL, nr: nrL, lf: Number.NaN },
+      short: { nc: ncS, c: cS, nr: nrS, lf },
       net,
-      pct: { nc: (net.nc / oi) * 100, c: (net.c / oi) * 100, nr: (net.nr / oi) * 100 },
+      pct: { nc: (net.nc / oi) * 100, c: (net.c / oi) * 100, nr: (net.nr / oi) * 100, lf: (lf / oi) * 100 },
       rates: { carry, rate },
       pub,
       close: closeAt(t),
@@ -155,7 +162,7 @@ declare const DATA: ChartData;
   const DEFAULT_STATE: State = {
     range: 'all',
     unit: 'pct',
-    visible: { nc: true, c: true, nr: true },
+    visible: { nc: true, c: true, nr: true, lf: false },
     carry: { carry: true, rate: true },
     layers: { cross: true, mcc: true },
     tableOpen: false,
@@ -421,7 +428,7 @@ declare const DATA: ChartData;
     const lastIdx = weeks.length - 1 - [...weeks].reverse().findIndex((w) => w.t <= t1);
     const withEdges = weeks.slice(Math.max(0, first - 1), Math.min(weeks.length, lastIdx + 2));
     const shown = SERIES.filter((s) => state.visible[s.key]);
-    const vals = inRange.flatMap((w) => shown.map((s) => valueOf(w, s.key, state.unit)));
+    const vals = inRange.flatMap((w) => shown.map((s) => valueOf(w, s.key, state.unit))).filter(Number.isFinite);
     let yPos: ((v: number) => number) | null = null;
     let posTicks: number[] = [];
     let posStep = 1;
@@ -486,7 +493,8 @@ declare const DATA: ChartData;
       }
     }
     svgText(svg, A.x0, A.y0 - 10, 'Prix du bitcoin (BTCUSDT, échelle log.)', { class: 'panel-title' });
-    svgText(svg, B.x0, B.y0 - 12, state.unit === 'pct' ? 'Position nette, en % de l’intérêt ouvert' : 'Position nette, en contrats', {
+    const posTitle = state.visible.lf ? 'Positions nettes, et courts bruts des hedge funds' : 'Position nette';
+    svgText(svg, B.x0, B.y0 - 12, `${posTitle}, ${state.unit === 'pct' ? 'en % de l’intérêt ouvert' : 'en contrats'}`, {
       class: 'panel-title',
     });
     svgText(
@@ -513,7 +521,10 @@ declare const DATA: ChartData;
     if (yPos) {
       const y = yPos;
       for (const s of shown) {
-        svgEl('path', { d: pathOf(withEdges.map((w) => [x(w.t), y(valueOf(w, s.key, state.unit))] as const)), class: `line stroke-${s.key}` }, gB);
+        const d = runsOf(withEdges, (w) => Number.isFinite(valueOf(w, s.key, state.unit)))
+          .map((run) => pathOf(run.map((w) => [x(w.t), y(valueOf(w, s.key, state.unit))] as const)))
+          .join('');
+        svgEl('path', { d, class: `line stroke-${s.key}` }, gB);
       }
       if (state.layers.cross && state.visible.nc) {
         for (const w of inRange) {
@@ -563,9 +574,9 @@ declare const DATA: ChartData;
     if (yPos && lastWeek) {
       const y = yPos;
       endLabels(
-        shown.map((s) => {
+        shown.flatMap((s) => {
           const v = valueOf(lastWeek, s.key, state.unit);
-          return { y: y(v), cls: s.key, text: valueText(v, state.unit) };
+          return Number.isFinite(v) ? [{ y: y(v), cls: s.key, text: seriesText(s.key, v, state.unit) }] : [];
         }),
         B,
         x(lastWeek.t),
@@ -627,7 +638,12 @@ declare const DATA: ChartData;
     const xx = f.x(w.t);
     svgEl('line', { x1: crisp(xx), x2: crisp(xx), y1: f.A.y0, y2: f.C.y1, class: 'xhair' }, layer);
     if (w.close !== undefined) svgEl('circle', { cx: xx, cy: f.yPrice(w.close), r: 4, class: 'dot fill-price' }, layer);
-    if (f.yPos) for (const s of f.shown) svgEl('circle', { cx: xx, cy: f.yPos(valueOf(w, s.key, state.unit)), r: 4, class: `dot fill-${s.key}` }, layer);
+    if (f.yPos) {
+      for (const s of f.shown) {
+        const v = valueOf(w, s.key, state.unit);
+        if (Number.isFinite(v)) svgEl('circle', { cx: xx, cy: f.yPos(v), r: 4, class: `dot fill-${s.key}` }, layer);
+      }
+    }
     if (f.yCarry) {
       for (const s of f.carryShown) {
         const v = w.rates[s.key];
@@ -649,13 +665,19 @@ declare const DATA: ChartData;
     }
     if (f.shown.length) tip.append(htmlEl('div', 'tip-sep'));
     for (const s of f.shown) {
+      const v = valueOf(w, s.key, state.unit);
+      if (!Number.isFinite(v)) continue;
       const row = htmlEl('div', 'tip-row');
-      const other = state.unit === 'pct' ? `${signed(w.net[s.key])} contrats` : `${pctText(w.pct[s.key], 2)} de l’OI`;
+      const detail =
+        s.key === 'lf'
+          ? `${state.unit === 'pct' ? `${plain(w.net.lf)} contrats` : `${plain(w.pct.lf, 2)}${NBSP}% de l’OI`} · positions courtes brutes, rapport TFF`
+          : `${state.unit === 'pct' ? `${signed(w.net[s.key])} contrats` : `${pctText(w.pct[s.key], 2)} de l’OI`} · ` +
+            `longs ${plain(w.long[s.key])}, courts ${plain(w.short[s.key])}`;
       row.append(
         keySvg('line', `stroke-${s.key}`, 14),
-        htmlEl('strong', '', valueText(valueOf(w, s.key, state.unit), state.unit, 2)),
+        htmlEl('strong', '', seriesText(s.key, v, state.unit, 2)),
         htmlEl('span', 'name', s.name),
-        htmlEl('small', '', `${other} · longs ${plain(w.long[s.key])}, courts ${plain(w.short[s.key])}`),
+        htmlEl('small', '', detail),
       );
       tip.append(row);
     }
@@ -855,7 +877,9 @@ declare const DATA: ChartData;
       `Dernier rapport : positions arrêtées le ${frDate(DATA.lastAsOf)}` +
       `${DATA.lastPublication ? `, publiées le ${frDate(DATA.lastPublication)}` : ''}` +
       ` · bitcoin ${lastPrice !== undefined ? usd(lastPrice) : '—'} à la clôture du ${frDate(isoOfDay(priceEnd))}.`;
-    byId('source').textContent = `Données COT : ${DATA.cotSource}. Prix : ${DATA.priceSource}. Prime des futures : ${DATA.carrySource}.`;
+    byId('source').textContent =
+      `Données COT : ${DATA.cotSource}. Hedge funds : ${DATA.tffSource}. Prix : ${DATA.priceSource}. ` +
+      `Prime des futures : ${DATA.carrySource}.`;
   }
 
   function setRange(key: RangeKey): void {
@@ -924,7 +948,10 @@ declare const DATA: ChartData;
       for (const cell of [
         frDate(w.d),
         w.close !== undefined ? usd(w.close) : '—',
-        ...f.shown.map((s) => valueText(valueOf(w, s.key, state.unit), state.unit, 2)),
+        ...f.shown.map((s) => {
+          const v = valueOf(w, s.key, state.unit);
+          return Number.isFinite(v) ? seriesText(s.key, v, state.unit, 2) : '—';
+        }),
         ...f.carryShown.map((s) => {
           const v = w.rates[s.key];
           return v === null ? '—' : rateText(v, 2);

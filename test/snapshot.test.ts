@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildTracker, DEFAULT_TRACKER_OPTIONS } from '../src/analysis/tracker.ts';
 import { checkIntegrity } from '../src/cot/legacy.ts';
-import { loadDataset } from '../src/config.ts';
+import { loadDataset, loadTff } from '../src/config.ts';
 
 const ds = loadDataset('133741');
 
@@ -31,4 +31,14 @@ test('suivi : les non-commerciaux ne sont jamais nets courts sur août-septembre
   const recent = t.filter((r) => r.asOf >= '2026-08-01');
   assert.ok(recent.every((r) => r.ncNet > 0));
   assert.equal(Math.min(...recent.map((r) => r.ncNet)), 703);
+});
+
+test('snapshot TFF : shorts des Leveraged Funds, mêmes 442 dates que le Legacy (valeurs publiées)', () => {
+  const tff = loadTff(ds);
+  assert.equal(tff.rows.length, 442);
+  assert.deepEqual(tff.rows.map((r) => r.asOf), ds.cot.map((r) => r.asOf));
+  const at = (d: string) => tff.rows.find((r) => r.asOf === d)?.levMoneyShort;
+  assert.equal(at('2018-04-10'), 1108);
+  assert.equal(at('2024-12-17'), 26850);
+  assert.equal(at('2026-09-22'), 12698);
 });

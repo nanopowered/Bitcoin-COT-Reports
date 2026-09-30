@@ -1,0 +1,12 @@
+{
+  "source": "TradingView COT3:133741_F_LMP_S (CFTC Traders in Financial Futures, futures seuls) via tvremix get_ohlcv, intervalle 1D",
+  "retrievedAt": "2026-09-30T12:00:00Z",
+  "rows": 442,
+  "first": "2018-04-10",
+  "last": "2026-09-22",
+  "notes": [
+    "lev_money_short = positions courtes des « Leveraged Funds » (hedge funds, CTA), en contrats, valeur publiée.",
+    "Mêmes 442 dates d’arrêté que le rapport Legacy (vérifié).",
+    "Les catégories TFF ne recoupent pas celles du Legacy : une partie des dealers, classés à part dans le TFF, est non commerciale dans le Legacy."
+  ]
+}

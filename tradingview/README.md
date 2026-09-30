@@ -2,16 +2,17 @@
 
 Deux indicateurs Pine Script (v5) qui reproduisent les panneaux du graphique du dépôt (`output/graphique.html`) sous un graphique du bitcoin dans TradingView.
 
-| Fichier | Panneau reproduit | Séries (chacune se coche ou se décoche dans les paramètres) |
+| Fichier | Panneau reproduit | Courbes (onglet *Style*) |
 |---|---|---|
-| [`cot-bitcoin-positions.pine`](cot-bitcoin-positions.pine) | Positions COT | Nets des non-commerciaux, commerciaux et non-déclarants (% de l'OI ou contrats) ; courts bruts des hedge funds (TFF, décochée par défaut) ; passages net short ; éditions McClellan |
-| [`prime-futures-cme.pine`](prime-futures-cme.pine) | Prime des futures | Prime CME annualisée (2e contrat / 1er), taux US à 3 mois, écart ombré ; en option, l'écart en ligne et le 10 ans |
+| [`cot-bitcoin-positions.pine`](cot-bitcoin-positions.pine) | Positions COT | Nets des non-commerciaux, commerciaux et non-déclarants (% de l'OI ou contrats) ; courts bruts des hedge funds (rapport TFF) ; passages net short |
+| [`prime-futures-cme.pine`](prime-futures-cme.pine) | Prime des futures | Prime CME annualisée (2e contrat / 1er), taux US à 3 mois, écart ombré ; décochés par défaut : l'écart en ligne et le 10 ans |
 
 ## Installation
 
 1. Ouvrir un graphique du bitcoin en **quotidien** (par exemple `BINANCE:BTCUSDT` ou `CME:BTC1!`), en échelle logarithmique pour retrouver le panneau du prix.
 2. Éditeur Pine → *Nouveau* → coller le contenu d'un fichier → *Enregistrer* → *Ajouter au graphique*. Recommencer avec le second.
-3. Chaque indicateur s'affiche dans son propre panneau, sous le prix. Les séries se règlent dans *Paramètres → Entrées*.
+3. Chaque indicateur s'affiche dans son propre panneau, sous le prix.
+4. **Montrer ou masquer une courbe : *Paramètres → Style***, case devant son nom ; les couleurs s'y changent aussi. L'onglet *Entrées* ne garde que les réglages de calcul : contrat, unité, date de publication, tableau (et, pour la prime, le taux de référence et la médiane).
 
 Les séries COT sont gratuites sur TradingView. Les futures CME le sont en différé ; ce délai n'a pas d'effet sur une prime calculée à la clôture.
 
@@ -22,6 +23,8 @@ Les séries COT sont gratuites sur TradingView. Les futures CME le sont en diff�
 - **Dates.** TradingView place chaque rapport au mardi d'arrêté, comme le graphique du dépôt. L'option *Afficher chaque rapport à sa publication* le montre à partir du vendredi (graphiques quotidiens et intrajournaliers). Les retards des shutdowns (2018-2019, 2025) ne sont pas modélisés.
 - **Contrat.** Le paramètre *Contrat CFTC* bascule sur le Micro Bitcoin (133742).
 - **Prime.** Échéance = dernier vendredi du mois, jours fériés ignorés. Sur un graphique hebdomadaire ou plus long, chaque barre prend la dernière séance de la période, sans médiane.
+- **Hedge funds.** Autre rapport que celui de McClellan (TFF, pas Legacy) et position brute, pas un net : la courbe ne s'additionne pas aux trois autres. Elle écrase l'échelle des nets, surtout en contrats : décochez-la dans *Style* pour zoomer sur eux. Si elle reste vide, la ligne « Hedge funds » du tableau affiche « — » : TradingView ne trouve pas le ticker.
+- **Couleurs.** Palette du dépôt, lisible sur fond clair (#ffffff) comme sur fond sombre (#131722), vérifiée pour les daltoniens.
 - **Alertes.** Passage net short / net long des non-commerciaux ; prime qui passe sous ou au-dessus du taux à 3 mois. Aucun seuil de McClellan : il n'en publie pas.
 
 ## Valeurs de contrôle

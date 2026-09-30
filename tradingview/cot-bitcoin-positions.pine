@@ -6,10 +6,6 @@
 // • Position nette = positions longues − positions courtes d'une catégorie, en % de l'intérêt ouvert
 //   (OI) ou en contrats. Les positions « spread » des non-commerciaux, à la fois longues et courtes,
 //   n'entrent pas dans le net : les trois nets s'additionnent à zéro.
-// • Hedge funds : positions courtes des « Leveraged Funds » du rapport TFF (Traders in Financial
-//   Futures), même contrat, mêmes dates. Autre rapport que celui de McClellan, et position brute, pas un
-//   net : elle ne s'additionne pas aux trois autres courbes. C'est la jambe vendeuse typique d'un
-//   arbitrage cash-and-carry (acheter le bitcoin au comptant, vendre le future).
 // • Affichage : chaque courbe se montre ou se masque dans Paramètres → Style, où se changent aussi les
 //   couleurs (palette du dépôt, lisible sur fond clair comme sur fond sombre).
 // • Dates : TradingView date chaque rapport au mardi d'arrêté des positions, comme le graphique du
@@ -17,8 +13,8 @@
 //   rapport à sa publication » le montre à partir du vendredi sur les graphiques quotidiens et
 //   intrajournaliers. Non modélisés : les publications retardées par les shutdowns (rapport du
 //   24/12/2018 publié le 01/02/2019, celui du 30/09/2025 le 19/11/2025) et les semaines fériées.
-// • Tickers du rapport Legacy construits avec la bibliothèque officielle TradingView/LibraryCOT (par
-//   exemple COT:133741_F_NCP_L) ; celui du TFF est écrit en clair (COT3:133741_F_LMP_S).
+// • Tickers construits avec la bibliothèque officielle TradingView/LibraryCOT (par exemple
+//   COT:133741_F_NCP_L).
 // ════════════════════════════════════════════════════════════════════════════════════════════════
 indicator("COT bitcoin CME : positions nettes", shorttitle = "COT BTC", precision = 2)
 
@@ -28,7 +24,6 @@ DAY_MS = 86400000
 NC_COL = #2a78d6
 C_COL  = #d95926
 NR_COL = #199e70
-LF_COL = #c98500
 
 // ───────────── Entrées ─────────────
 contractIn    = input.string("133741 · Bitcoin (5 BTC)", "Contrat CFTC", options = ["133741 · Bitcoin (5 BTC)", "133742 · Micro Bitcoin (0,1 BTC)"])
@@ -45,9 +40,6 @@ tkCL  = cot.COTTickerid("Legacy", code, false, "Commercial Positions", "Long", "
 tkCS  = cot.COTTickerid("Legacy", code, false, "Commercial Positions", "Short", "All")
 tkNRL = cot.COTTickerid("Legacy", code, false, "Nonreportable Positions", "Long", "All")
 tkNRS = cot.COTTickerid("Legacy", code, false, "Nonreportable Positions", "Short", "All")
-// Rapport TFF (préfixe COT3), positions courtes des Leveraged Funds : ticker écrit en clair, vérifié contre les
-// données TradingView ; le libellé de cette métrique dans LibraryCOT n'a pas pu être confirmé.
-tkLFS = "COT3:" + code + "_F_LMP_S"
 
 // Les séries COT n'ont qu'une barre par semaine : pas de requête intrajournalière.
 tf    = timeframe.isintraday ? "D" : timeframe.period
@@ -58,18 +50,17 @@ cLR   = request.security(tkCL, tf, close, ignore_invalid_symbol = true)
 cSR   = request.security(tkCS, tf, close, ignore_invalid_symbol = true)
 nrLR  = request.security(tkNRL, tf, close, ignore_invalid_symbol = true)
 nrSR  = request.security(tkNRS, tf, close, ignore_invalid_symbol = true)
-lfSR  = request.security(tkLFS, tf, close, ignore_invalid_symbol = true)
 // Date d'arrêté du dernier rapport (mardi 00:00 UTC), quelle que soit l'unité de temps du graphique.
 asOfR = request.security(tkOI, "D", time, ignore_invalid_symbol = true)
 
 // ───────────── Rapport affiché : à l'arrêté, ou à la publication ─────────────
-var float[] cur  = array.new_float(8, na)
-var float[] pend = array.new_float(8, na)
+var float[] cur  = array.new_float(7, na)
+var float[] pend = array.new_float(7, na)
 var int pendAsOf = na
 var int curAsOf  = na
 isNew = not na(asOfR) and (na(asOfR[1]) or asOfR != asOfR[1])
 if isNew
-    pend     := array.from(oiR, ncLR, ncSR, cLR, cSR, nrLR, nrSR, lfSR)
+    pend     := array.from(oiR, ncLR, ncSR, cLR, cSR, nrLR, nrSR)
     pendAsOf := asOfR
 shiftToFriday = atPublication and (timeframe.isintraday or timeframe.isdaily)
 released = false
@@ -83,7 +74,6 @@ oi      = array.get(cur, 0)
 ncNet   = array.get(cur, 1) - array.get(cur, 2)
 cNet    = array.get(cur, 3) - array.get(cur, 4)
 nrNet   = array.get(cur, 5) - array.get(cur, 6)
-lfShort = array.get(cur, 7)
 isPct   = unitIn == "% de l'intérêt ouvert"
 toUnit(float x) =>
     isPct ? x / oi * 100 : x
@@ -97,20 +87,17 @@ hline(0, "Zéro", color.new(color.gray, 30))
 plot(toUnit(ncNet), "Non-commerciaux (net)", NC_COL, 2)
 plot(toUnit(cNet), "Commerciaux (net)", C_COL, 2)
 plot(toUnit(nrNet), "Non-déclarants (net)", NR_COL, 2)
-plot(toUnit(lfShort), "Hedge funds : courts bruts (TFF)", LF_COL, 2)
 plot(crossShort ? toUnit(ncNet) : na, "Passage net short", NC_COL, 5, plot.style_circles)
 
 // ───────────── Tableau du dernier rapport ─────────────
 fmtNet(float x) =>
     na(x) ? "—" : (x >= 0 ? "+" : "") + str.tostring(x, isPct ? "0.00" : "0") + (isPct ? " %" : "")
-fmtGross(float x) =>
-    na(x) ? "—" : str.tostring(x, isPct ? "0.00" : "0") + (isPct ? " %" : "")
 
-var table tb = table.new(position.top_right, 2, 5, bgcolor = color.new(chart.bg_color, 15))
+var table tb = table.new(position.top_right, 2, 4, bgcolor = color.new(chart.bg_color, 15))
 if showTable and barstate.islast
     ink = chart.fg_color
     dateTxt = na(curAsOf) ? "Données COT indisponibles" : "Arrêté du " + str.format_time(curAsOf, "dd/MM/yyyy", "UTC")
-    table.cell(tb, 0, 0, dateTxt, text_color = ink, text_size = size.small, text_halign = text.align_left, tooltip = "Tickers : " + tkNCL + ", " + tkLFS)
+    table.cell(tb, 0, 0, dateTxt, text_color = ink, text_size = size.small, text_halign = text.align_left, tooltip = "Ticker : " + tkNCL)
     table.cell(tb, 1, 0, isPct ? "% OI" : "contrats", text_color = ink, text_size = size.small, text_halign = text.align_right)
     table.cell(tb, 0, 1, "Non-commerciaux", text_color = NC_COL, text_size = size.small, text_halign = text.align_left)
     table.cell(tb, 1, 1, fmtNet(toUnit(ncNet)), text_color = ink, text_size = size.small, text_halign = text.align_right)
@@ -118,8 +105,6 @@ if showTable and barstate.islast
     table.cell(tb, 1, 2, fmtNet(toUnit(cNet)), text_color = ink, text_size = size.small, text_halign = text.align_right)
     table.cell(tb, 0, 3, "Non-déclarants", text_color = NR_COL, text_size = size.small, text_halign = text.align_left)
     table.cell(tb, 1, 3, fmtNet(toUnit(nrNet)), text_color = ink, text_size = size.small, text_halign = text.align_right)
-    table.cell(tb, 0, 4, "Hedge funds, courts (TFF)", text_color = LF_COL, text_size = size.small, text_halign = text.align_left)
-    table.cell(tb, 1, 4, fmtGross(toUnit(lfShort)), text_color = ink, text_size = size.small, text_halign = text.align_right)
 
 // ───────────── Alertes ─────────────
 alertcondition(crossShort, "COT BTC : passage net short", "COT bitcoin CME : les non-commerciaux passent nets courts.")
